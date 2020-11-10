@@ -185,7 +185,7 @@ bool SinusoidalPatternProfilometry_Impl::generate( OutputArrayOfArrays pattern )
     float frequency;
     // m and n are parameters described in the reference paper
     int m = params.nbrOfPixelsBetweenMarkers;
-    int n;
+    int n =1;
     // Offset for the first marker of the first row.
     int firstMarkerOffset = 10;
     int mnRatio;
