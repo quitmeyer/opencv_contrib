@@ -207,11 +207,11 @@ int main(int argc, char *argv[]) {
         waitTime = 0;
     } else {
         inputVideo[0].open(camId0);
-        inputVideo[1].open(camId1)
+        inputVideo[1].open(camId1);
         waitTime = 10;
     }
 
-   fadsf inputVideo.set(CAP_PROP_AUTO_EXPOSURE, 1);
+    inputVideo.set(CAP_PROP_AUTO_EXPOSURE, 1);
     Ptr<aruco::Dictionary> dictionary =
         aruco::getPredefinedDictionary(aruco::PREDEFINED_DICTIONARY_NAME(dictionaryId));
 

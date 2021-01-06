@@ -1,44 +1,9 @@
 /*M///////////////////////////////////////////////////////////////////////////////////////
  //
- //  IMPORTANT: READ BEFORE DOWNLOADING, COPYING, INSTALLING OR USING.
- //
- //  By downloading, copying, installing or using the software you agree to this license.
- //  If you do not agree to this license, do not download, install,
- //  copy or use the software.
- //
- //
- //                           License Agreement
- //                For Open Source Computer Vision Library
- //
- // Copyright (C) 2015, OpenCV Foundation, all rights reserved.
- // Third party copyrights are property of their respective owners.
- //
- // Redistribution and use in source and binary forms, with or without modification,
- // are permitted provided that the following conditions are met:
- //
- //   * Redistribution's of source code must retain the above copyright notice,
- //     this list of conditions and the following disclaimer.
- //
- //   * Redistribution's in binary form must reproduce the above copyright notice,
- //     this list of conditions and the following disclaimer in the documentation
- //     and/or other materials provided with the distribution.
- //
- //   * The name of the copyright holders may not be used to endorse or promote products
- //     derived from this software without specific prior written permission.
- //
- // This software is provided by the copyright holders and contributors "as is" and
- // any express or implied warranties, including, but not limited to, the implied
- // warranties of merchantability and fitness for a particular purpose are disclaimed.
- // In no event shall the Intel Corporation or contributors be liable for any direct,
- // indirect, incidental, special, exemplary, or consequential damages
- // (including, but not limited to, procurement of substitute goods or services;
- // loss of use, data, or profits; or business interruption) however caused
- // and on any theory of liability, whether in contract, strict liability,
- // or tort (including negligence or otherwise) arising in any way out of
- // the use of this software, even if advised of the possibility of such damage.
+
  //
  //M*/
-
+//#include "DataExporter.cpp"
 #include <iostream>
 #include <opencv2/core.hpp>
 #include <opencv2/highgui.hpp>
@@ -46,14 +11,19 @@
 #include <opencv2/imgproc.hpp>
 #include <opencv2/structured_light.hpp>
 #include <opencv2/opencv_modules.hpp>
+#include <fstream>  
 
 // (if you did not build the opencv_viz module, you will only see the disparity images)
 #ifdef HAVE_OPENCV_VIZ
 #include <opencv2/viz.hpp>
 #endif
+#include <iomanip>
+#include <opencv2/highgui/highgui_c.h>
 
 using namespace std;
 using namespace cv;
+
+//Small projector is 1366 x 768    large projector is 1920 x 1080
 
 static const char* keys =
 { "{@images_list | | Image list where the captured pattern images are saved}"
@@ -114,6 +84,12 @@ static bool readStringList( const string& filename, vector<string>& l )
   return true;
 }
 
+
+//GUI buttton   This function should be prototyped as void Foo(int state,*void); . state is the current state of the button. It could be -1 for a push button, 0 or 1 for a check/radio box button. 
+void callbackButton(int state, void* userdata ) {
+
+}
+
 int main( int argc, char** argv )
 {
   structured_light::GrayCodePattern::Params params;
@@ -130,6 +106,7 @@ int main( int argc, char** argv )
     return -1;
   }
 
+  
   // Set up GraycodePattern with params
   Ptr<structured_light::GrayCodePattern> graycode = structured_light::GrayCodePattern::create( params );
   size_t white_thresh = 0;
@@ -204,22 +181,47 @@ int main( int argc, char** argv )
   initUndistortRectifyMap( cam1intrinsics, cam1distCoeffs, R1, P1, imagesSize, CV_32FC1, map1x, map1y );
   initUndistortRectifyMap( cam2intrinsics, cam2distCoeffs, R2, P2, imagesSize, CV_32FC1, map2x, map2y );
 
+  namedWindow("Unrectified", WINDOW_NORMAL);
+
+  resizeWindow("Unrectified", 700, 700);
+  moveWindow("Unrectified", 0, 10);
+  namedWindow("Rectified", WINDOW_NORMAL);
+
+  resizeWindow("Rectified", 700, 700);
+  moveWindow("Rectified", 900, 10);
+
+
+
   // Loading pattern images
   for( size_t i = 0; i < numberOfPatternImages; i++ )
   {
+      cout <<i <<" of "<< numberOfPatternImages << endl;
+
+      if ((!imread(imagelist[i], IMREAD_GRAYSCALE).data) || (!imread(imagelist[i + numberOfPatternImages + 2], IMREAD_GRAYSCALE).data))
+      {
+          cout << "Empty images at index " << i << " " << imagelist[i] << "  or  " << imagelist[i + numberOfPatternImages + 2] << endl;
+          help();
+          return -1;
+      }
     captured_pattern[0][i] = imread( imagelist[i], IMREAD_GRAYSCALE );
     captured_pattern[1][i] = imread( imagelist[i + numberOfPatternImages + 2], IMREAD_GRAYSCALE );
 
-    if( (!captured_pattern[0][i].data) || (!captured_pattern[1][i].data) )
-    {
-      cout << "Empty images" << endl;
-      help();
-      return -1;
-    }
+ 
 
-    remap( captured_pattern[1][i], captured_pattern[1][i], map1x, map1y, INTER_NEAREST, BORDER_CONSTANT, Scalar() );
     remap( captured_pattern[0][i], captured_pattern[0][i], map2x, map2y, INTER_NEAREST, BORDER_CONSTANT, Scalar() );
+    remap(captured_pattern[1][i], captured_pattern[1][i], map1x, map1y, INTER_NEAREST, BORDER_CONSTANT, Scalar());
 
+
+    //Debug and see remapped images
+    /**
+    imshow("Unrectified", imread(imagelist[i + numberOfPatternImages + 2], IMREAD_GRAYSCALE));
+
+
+    Mat result8u;
+    captured_pattern[1][i].convertTo(result8u, CV_8U);
+    imshow("Rectified", captured_pattern[1][i]);
+    waitKey(0); // have to wait to see image
+    /**/
   }
   cout << "done" << endl;
 
@@ -244,6 +246,7 @@ int main( int argc, char** argv )
   remap( blackImages[0], blackImages[0], map2x, map2y, INTER_NEAREST, BORDER_CONSTANT, Scalar() );
   remap( blackImages[1], blackImages[1], map1x, map1y, INTER_NEAREST, BORDER_CONSTANT, Scalar() );
 
+
   cout << endl << "Decoding pattern ..." << endl;
   Mat disparityMap;
   bool decoded = graycode->decode( captured_pattern, disparityMap, blackImages, whiteImages,
@@ -262,19 +265,98 @@ int main( int argc, char** argv )
     applyColorMap( scaledDisparityMap, cm_disp, COLORMAP_JET );
 
     // Show the result
-    resize( cm_disp, cm_disp, Size( 640, 480 ), 0, 0, INTER_LINEAR_EXACT );
+    resize( cm_disp, cm_disp, Size( 640*2, 480*2 ), 0, 0, INTER_LINEAR_EXACT );
     imshow( "cm disparity m", cm_disp );
 
+
     // Compute the point cloud
-    Mat pointcloud;
+    Mat pointCloud;
     disparityMap.convertTo( disparityMap, CV_32FC1 );
-    reprojectImageTo3D( disparityMap, pointcloud, Q, true, -1 );
+    reprojectImageTo3D( disparityMap, pointCloud, Q, true, -1 );
+    
+
+    cout << endl << "  Image Reprojected to 3D  " << endl;
+
+
 
     // Compute a mask to remove background
     Mat dst, thresholded_disp;
     threshold( scaledDisparityMap, thresholded_disp, 0, 255, THRESH_OTSU + THRESH_BINARY );
-    resize( thresholded_disp, dst, Size( 640, 480 ), 0, 0, INTER_LINEAR_EXACT );
+    resize( thresholded_disp, dst, Size( 640*2, 480*2 ), 0, 0, INTER_LINEAR_EXACT );
     imshow( "threshold disp otsu", dst );
+
+    // Apply the mask to the point cloud
+    Mat pointcloud_tresh, color_tresh;
+    pointCloud.copyTo(pointcloud_tresh, thresholded_disp);
+    color.copyTo(color_tresh, thresholded_disp);
+
+    //Try to save Point cloud
+    struct dataType { Point3d point; int red; int green; int blue; };
+    typedef dataType SpacePoint;
+    vector<SpacePoint> pointCloudSpace;
+
+    cv::FileStorage storage("C:/Users/andre/Desktop/Glowcake Hoss/Calibrations/TestDecode/data/pointcloud.mat", cv::FileStorage::WRITE);
+    storage << "img" << pointcloud_tresh;
+    storage.release();
+
+    //Trying to Save a PLY
+    cout << endl << "  Starting to Save the PLY  " << endl;
+    unsigned long numElem;
+    if (pointcloud_tresh.channels() == 3) {
+        numElem = pointcloud_tresh.rows * pointcloud_tresh.cols;
+    }
+    else {
+        numElem = pointcloud_tresh.rows;
+    }
+
+    ofstream outfile("C:/Users/andre/Desktop/Glowcake Hoss/Calibrations/TestDecode/data/pointcloud.ply");
+    // MARK: Header writing
+    outfile << "ply" << std::endl <<
+        "format " << "format ascii" << " 1.0" << std::endl <<
+        "comment file created using code by Cedric Menard" << std::endl <<
+        "element vertex " << numElem << std::endl <<
+        "property float x" << std::endl <<
+        "property float y" << std::endl <<
+        "property float z" << std::endl <<
+        "property uchar red" << std::endl <<
+        "property uchar green" << std::endl <<
+        "property uchar blue" << std::endl <<
+        "end_header" << std::endl;
+
+
+    // Pointer to data
+    const float* pData = pointcloud_tresh.ptr<float>(0);
+    const unsigned char* pColor = color_tresh.ptr<unsigned char>(0);
+    const unsigned long numIter = 3 * numElem;                            // Number of iteration (3 channels * numElem)
+   // const bool hostIsLittleEndian = isLittleEndian();
+
+    float_t bufferXYZ;                                                 // Coordinate buffer for float type
+    cout << endl << "  loop through  " << endl;
+
+    for (unsigned long i = 0; i < numIter; i += 3) {                            // Loop through all elements
+        for (unsigned int j = 0; j < 3; j++) {                                // Loop through 3 coordinates
+            outfile << std::setprecision(9) << pData[i + j] << " ";
+        }
+        for (int j = 2; j >= 0; j--) {
+            // OpenCV uses BGR format, so the order of writing is reverse to comply with the RGB format
+            outfile << (unsigned short)pColor[i + j] << (j == 0 ? "" : " ");                     // Loop through RGB
+        }
+        outfile << std::endl;                                            // End if element line
+    }
+    /*for (int i = 0; i < pointCloud.; i++)
+    {
+
+        Point3d point = pointCloud.at(i).point;
+        outfile << point.x << " ";
+        outfile << point.y << " ";
+        outfile << point.z << " ";
+        outfile << "\n";
+    }
+    outfile.close();*/
+
+    outfile.close();
+    cout << endl << "  Saved Point cloud to file  " << endl;
+    
 
 #ifdef HAVE_OPENCV_VIZ
     // Apply the mask to the point cloud

@@ -71,8 +71,8 @@ namespace {
 		"{@outfolder |<none> | Output folder to create files of calibrated camera parameters }"
 		"{v        |       | Input from video file, if ommited, input comes from camera }"
 
-		"{ci0       | 0     | Camera id if input doesnt come from video (-v) }"
-		"{ci1       | 1     | Camera id if input doesnt come from video (-v) }"
+		"{ciA       | 2     | Camera id if input doesnt come from video (-v) }"
+		"{ciB       | 1     | Camera id if input doesnt come from video (-v) }"
 
 		"{dp       |       | File of marker detector parameters }"
 		"{rs       | false | Apply refind strategy }"
@@ -276,8 +276,8 @@ int main(int argc, char* argv[]) {
 	}
 
 	bool refindStrategy = parser.get<bool>("rs");
-	int camIdA = parser.get<int>("ci0");
-	int camIdB = parser.get<int>("ci1");
+	int camIdA = parser.get<int>("ciA");
+	int camIdB = parser.get<int>("ciB");
 	String video;
 
 	if (parser.has("v")) {
@@ -348,8 +348,8 @@ int main(int argc, char* argv[]) {
 	
 
 	cout << "Cameras Started" << endl;
-	cout << "Cameras A Properties " <<" exposure "<< inputVideoA.get(CAP_PROP_EXPOSURE)<< "  Backend API " << inputVideoA.get(CAP_PROP_BACKEND) << "  Width and Height "<< inputVideoA.get(CAP_PROP_FRAME_WIDTH) << " " << inputVideoA.get(CAP_PROP_FRAME_HEIGHT) << endl;
-	cout << "Cameras B Properties " << " exposure "  << inputVideoB.get(CAP_PROP_EXPOSURE)  << "  Width and Height " << inputVideoB.get(CAP_PROP_FRAME_WIDTH) << " " << inputVideoB.get(CAP_PROP_FRAME_HEIGHT) << endl;
+	cout << "Cameras A Properties " << " ID num " << camIdA <<" exposure "<< inputVideoA.get(CAP_PROP_EXPOSURE)<< "  Backend API " << inputVideoA.get(CAP_PROP_BACKEND) << "  Width and Height "<< inputVideoA.get(CAP_PROP_FRAME_WIDTH) << " " << inputVideoA.get(CAP_PROP_FRAME_HEIGHT) << endl;
+	cout << "Cameras B Properties " << " ID num " << camIdB << " exposure "  << inputVideoB.get(CAP_PROP_EXPOSURE)  << "  Width and Height " << inputVideoB.get(CAP_PROP_FRAME_WIDTH) << " " << inputVideoB.get(CAP_PROP_FRAME_HEIGHT) << endl;
 
 
 	Ptr<aruco::Dictionary> dictionary =
