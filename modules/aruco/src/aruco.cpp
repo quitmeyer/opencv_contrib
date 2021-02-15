@@ -1562,7 +1562,7 @@ void drawDetectedMarkers(InputOutputArray _image, InputArrayOfArrays _corners,
             Point2f p0, p1;
             p0 = currentMarker.ptr< Point2f >(0)[j];
             p1 = currentMarker.ptr< Point2f >(0)[(j + 1) % 4];
-            line(_image, p0, p1, borderColor, 1);
+            line(_image, p0, p1, borderColor, 6);
         }
         // draw first corner mark
         rectangle(_image, currentMarker.ptr< Point2f >(0)[0] - Point2f(3, 3),
@@ -1576,7 +1576,7 @@ void drawDetectedMarkers(InputOutputArray _image, InputArrayOfArrays _corners,
             cent = cent / 4.;
             stringstream s;
             s << "id=" << _ids.getMat().ptr< int >(0)[i];
-            putText(_image, s.str(), cent, FONT_HERSHEY_SIMPLEX, 0.5, textColor, 2);
+            putText(_image, s.str(), cent, FONT_HERSHEY_SIMPLEX, 1.5, textColor, 2);
         }
     }
 }

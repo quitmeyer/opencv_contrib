@@ -400,7 +400,7 @@ int main(int argc, char* argv[]) {
 	//This is the main video-grabbing loop
 	while (inputVideoA.grab() && inputVideoB.grab()) // grab frams at the same time! for multicam
 	{
-	
+	//while(1){
 		//Start the FPS timer
 		int64 tickstart = cv::getTickCount();
 		
@@ -410,14 +410,65 @@ int main(int argc, char* argv[]) {
 		Mat imageB, imageCopyB;
 		inputVideoB.retrieve(imageB);
 
+		//inputVideoA >> imageA;
+		//inputVideoB >> imageB;
 
+		vector< int > ids;
+		vector< vector< Point2f > > corners, rejected;
+
+		vector< int > ids1;
+		vector< vector< Point2f > > corners1, rejected1;
+
+		//MAKE GRAYSCALE FOR PERFORMANCE
+	/*	cvtColor(imageA, imageA, COLOR_BGR2GRAY);
+		cvtColor(imageB, imageB, COLOR_BGR2GRAY);*/
+
+
+		// detect markers
+		aruco::detectMarkers(imageA, dictionary, corners, ids, detectorParams, rejected);
+		aruco::detectMarkers(imageB, dictionary, corners1, ids1, detectorParams, rejected1);
+
+
+		// refind strategy to detect more markers
+		if (refindStrategy) aruco::refineDetectedMarkers(imageA, board0, corners, ids, rejected);
+
+		if (refindStrategy) aruco::refineDetectedMarkers(imageB, board1, corners1, ids1, rejected1);
+
+		// interpolate charuco corners
+		Mat currentCharucoCornersA, currentCharucoIdsA;
+		Mat currentCharucoCornersB, currentCharucoIdsB;
+
+
+		if (ids.size() > 0)
+			aruco::interpolateCornersCharuco(corners, ids, imageA, charucoboard0, currentCharucoCornersA,
+				currentCharucoIdsA);
+
+		if (ids1.size() > 0)
+			aruco::interpolateCornersCharuco(corners1, ids1, imageB, charucoboard1, currentCharucoCornersB,
+				currentCharucoIdsB);
 		
 		imageA.copyTo(imageCopyA);
 		imageB.copyTo(imageCopyB);
 
+		//Change the gray back to color
+	/*	cvtColor(imageCopyA, imageCopyA, COLOR_GRAY2BGR);
+		cvtColor(imageCopyB, imageCopyB, COLOR_GRAY2BGR);*/
+
+
+		// draw results
+		/**/
+
+		if (ids.size() > 0) aruco::drawDetectedMarkers(imageCopyA, corners);
+
 		
+		if (ids1.size() > 0) aruco::drawDetectedMarkers(imageCopyB, corners1);
+
 		//Draw Charuco markers
 
+		if (currentCharucoCornersA.total() > 0)
+				aruco::drawDetectedCornersCharuco(imageCopyA, currentCharucoCornersA, currentCharucoIdsA);
+			if (currentCharucoCornersB.total() > 0)
+			aruco::drawDetectedCornersCharuco(imageCopyB, currentCharucoCornersB, currentCharucoIdsB, Scalar(255, 255, 255));
 	
 			/**/
 		//Shrink the Image for Display purposes
@@ -430,12 +481,21 @@ int main(int argc, char* argv[]) {
 		Scalar texColA = Scalar(255, 0, 0);
 		Scalar texColB = Scalar(255, 0, 0);
 
-		
+		if (currentCharucoCornersA.total() < board0->objPoints.size()){
+			texColA = Scalar(0, 0, 255);
+			putText(imageCopyA, "NOT ALL POINTS VISIBLE " + to_string(currentCharucoCornersA.total()),
+				Point(10, 100), FONT_HERSHEY_SIMPLEX, 1.4, texColA, 4);
+		}
 		putText(imageCopyA, "Cam A: Press 'c' to add current frame. 'ESC' to finish and calibrate",
 			Point(10, 20), FONT_HERSHEY_SIMPLEX, .5, texColA, 2);
 
 
-	
+		if (currentCharucoCornersB.total() < board1->objPoints.size()) {
+			texColB = Scalar(0, 0, 255);
+
+			putText(imageCopyB, "NOT ALL POINTS VISIBLE " + to_string(currentCharucoCornersB.total()),
+				Point(10, 100), FONT_HERSHEY_SIMPLEX, 1.4, texColB, 2);
+		}
 		putText(imageCopyB, "Cam B: 'c'=add current frame. 'ESC'= calibrate",
 			Point(10, 20), FONT_HERSHEY_SIMPLEX, .5, texColB, 2);
 
@@ -496,16 +556,24 @@ int main(int argc, char* argv[]) {
 
 		}
 
-		
-		if (key == 'c') {
+		if (key == 'c' && ( currentCharucoCornersB.total() < totalCorners || currentCharucoCornersA.total() < totalCorners)) {
+
+			cout << "Frame Not Captured, Please make sure all IDs are visible!" << endl;
+
+
+		}
+
+		if (key == 'c' && currentCharucoCornersB.total() == totalCorners && currentCharucoCornersA.total() == totalCorners) {
 			cout << "Frame "<< framenum <<" captured camA" << endl;
-			
+			allCorners0.push_back(corners);
+			allIds0.push_back(ids);
 			allImgs0.push_back(imageA);
 			imgSize0 = imageA.size();
 
 			
 				cout << "Frame captured camB" << endl;
-			
+				allCorners1.push_back(corners1);
+				allIds1.push_back(ids1);
 				allImgs1.push_back(imageB);
 				imgSize1 = imageB.size();
 		
@@ -545,9 +613,265 @@ int main(int argc, char* argv[]) {
 
 
 
-	cout << "Finished Saving Images" << endl;
+	cout << "Video Grabbing ended, Starting to Process" << endl;
+
+	if (allIds0.size() < 1) {
+		cerr << "Not enough captures for calibration" << endl;
+		return 0;
+	}
+	if (allIds1.size() < 1) {
+		cerr << "Not enough captures for calibration" << endl;
+		return 0;
+	}
+
+	Mat cameraMatrix, distCoeffs;
+	vector< Mat > rvecs, tvecs;
+	double repError;
+
+	Mat cameraMatrix1, distCoeffs1;
+	vector< Mat > rvecs1, tvecs1;
+	double repError1;
+
+	if (calibrationFlags & CALIB_FIX_ASPECT_RATIO) {
+		cameraMatrix = Mat::eye(3, 3, CV_64F);
+		cameraMatrix.at< double >(0, 0) = aspectRatio;
+	}
+
+	if (calibrationFlags1 & CALIB_FIX_ASPECT_RATIO) {
+		cameraMatrix1 = Mat::eye(3, 3, CV_64F);
+		cameraMatrix1.at< double >(0, 0) = aspectRatio1;
+	}
+
+	// prepare data for calibration
+	vector< vector< Point2f > > allCornersConcatenated;
+	vector< int > allIdsConcatenated;
+	vector< int > markerCounterPerFrame;
+
+	vector< vector< Point2f > > allCornersConcatenated1;
+	vector< int > allIdsConcatenated1;
+	vector< int > markerCounterPerFrame1;
+
+	markerCounterPerFrame.reserve(allCorners0.size());
+	for (unsigned int i = 0; i < allCorners0.size(); i++) {
+		markerCounterPerFrame.push_back((int)allCorners0[i].size());
+		for (unsigned int j = 0; j < allCorners0[i].size(); j++) {
+			allCornersConcatenated.push_back(allCorners0[i][j]);
+			allIdsConcatenated.push_back(allIds0[i][j]);
+		}
+	}
+
+	markerCounterPerFrame1.reserve(allCorners1.size());
+	for (unsigned int i = 0; i < allCorners1.size(); i++) {
+		markerCounterPerFrame1.push_back((int)allCorners1[i].size());
+		for (unsigned int j = 0; j < allCorners1[i].size(); j++) {
+			allCornersConcatenated1.push_back(allCorners1[i][j]);
+			allIdsConcatenated1.push_back(allIds1[i][j]);
+		}
+	}
+
+	// calibrate camera using aruco markers
+	double arucoRepErr;
+	arucoRepErr = aruco::calibrateCameraAruco(allCornersConcatenated, allIdsConcatenated,
+		markerCounterPerFrame, board0, imgSize0, cameraMatrix,
+		distCoeffs, noArray(), noArray(), calibrationFlags);
+
+	double arucoRepErr1;
+	arucoRepErr1 = aruco::calibrateCameraAruco(allCornersConcatenated1, allIdsConcatenated1,
+		markerCounterPerFrame1, board1, imgSize1, cameraMatrix1,
+		distCoeffs1, noArray(), noArray(), calibrationFlags1);
+
+	// prepare data for charuco calibration
+	int nFrames = (int)allCorners0.size();
+	int nFrames1 = (int)allCorners1.size();
+
+	vector< Mat > allCharucoCorners;
+	vector< Mat > allCharucoIds;
+	vector< Mat > filteredImages;
+	allCharucoCorners.reserve(nFrames);
+	allCharucoIds.reserve(nFrames);
+
+	vector< Mat > allCharucoCorners1;
+	vector< Mat > allCharucoIds1;
+	vector< Mat > filteredImages1;
+	allCharucoCorners1.reserve(nFrames1);
+	allCharucoIds1.reserve(nFrames1);
+
+	for (int i = 0; i < nFrames; i++) {
+		// interpolate using camera parameters
+		Mat currentCharucoCorners, currentCharucoIds;
+		aruco::interpolateCornersCharuco(allCorners0[i], allIds0[i], allImgs0[i], charucoboard0,
+			currentCharucoCorners, currentCharucoIds, cameraMatrix,
+			distCoeffs);
+
+		allCharucoCorners.push_back(currentCharucoCorners);
+		allCharucoIds.push_back(currentCharucoIds);
+		filteredImages.push_back(allImgs0[i]);
+	}
+
+	for (int i = 0; i < nFrames1; i++) {
+		// interpolate using camera parameters
+		Mat currentCharucoCorners1, currentCharucoIds1;
+		aruco::interpolateCornersCharuco(allCorners1[i], allIds1[i], allImgs1[i], charucoboard1,
+			currentCharucoCorners1, currentCharucoIds1, cameraMatrix1,
+			distCoeffs);
+
+		allCharucoCorners1.push_back(currentCharucoCorners1);
+		allCharucoIds1.push_back(currentCharucoIds1);
+		filteredImages1.push_back(allImgs1[i]);
+	}
+
+	if (allCharucoCorners.size() < 4) {
+		cerr << "Not enough corners on CAMA for calibration" << endl;
+		return 0;
+	}
+
+	if (allCharucoCorners1.size() < 4) {
+		cerr << "Not enough corners on camB for calibration" << endl;
+		return 0;
+	}
+
+	// calibrate camera using charuco
+	repError =
+		aruco::calibrateCameraCharuco(allCharucoCorners, allCharucoIds, charucoboard0, imgSize0,
+			cameraMatrix, distCoeffs, rvecs, tvecs, calibrationFlags);
+
+	repError1 =
+		aruco::calibrateCameraCharuco(allCharucoCorners1, allCharucoIds1, charucoboard1, imgSize1,
+			cameraMatrix1, distCoeffs1, rvecs1, tvecs1, calibrationFlags1);
+
+	bool saveOk = saveCameraParams(outputFolder + "/" + "_CamA.yml", imgSize0, aspectRatio, calibrationFlags,
+		cameraMatrix, distCoeffs, repError);
+
+	bool saveOk1 = saveCameraParams(outputFolder + "/" + "_CamB.yml", imgSize1, aspectRatio1, calibrationFlags1,
+		cameraMatrix1, distCoeffs1, repError1);
+
+	if (!saveOk) {
+		cerr << "Cannot save output file CAMA" << endl;
+		return 0;
+	}
+
+	if (!saveOk1) {
+		cerr << "Cannot save output file CAMB" << endl;
+		return 0;
+	}
+
+	cout << "CamA Rep Error: " << repError << endl;
+	cout << "CamA Rep Error Aruco: " << arucoRepErr << endl;
+	cout << "CamA Calibration saved to " << outputFolder + "_CamA.yml" << endl;
+
+	cout << "CamB Rep Error: " << repError1 << endl;
+	cout << "CamB Rep Error Aruco: " << arucoRepErr1 << endl;
+	cout << "CamB Calibration saved to " << outputFolder + "_CamB.yml" << endl;
+	/*Perform Stereo Calibration Steps*/
+
+	cout << "Starting STEREO CALIBRATION Steps " << endl;
+
+	/* STEREO CALIBRATION
+	   
+	*/
+	   	 
+	Mat R, T, E, F;
+
+	vector< vector< Point3f > > object_points;
+	vector< Point2f > corners1, corners2;
+	vector< vector< Point2f > > left_img_points, right_img_points;
+	vector< Point3f > obj;
+
+
+	for (int i = 0; i < nFrames; i++)
+	{
+
+		object_points.push_back(charucoboard0->chessboardCorners);
+
+	}
 
 	
+
+	double rms = stereoCalibrate(object_points, allCharucoCorners, allCharucoCorners1,
+		cameraMatrix, distCoeffs,
+		cameraMatrix1, distCoeffs1,
+		imgSize0, R, T, E, F);
+
+
+	//TRY STEREO CALIB ON FIRST FRAME
+   /* double rms = stereoCalibrate(objectPoints, imagePoints0, imagePoints0,
+		cameraMatrix, distCoeffs,
+		cameraMatrix1, distCoeffs1,
+		imgSize0, R, T, E, F,
+		CALIB_FIX_ASPECT_RATIO +
+		CALIB_ZERO_TANGENT_DIST +
+		CALIB_USE_INTRINSIC_GUESS +
+		CALIB_SAME_FOCAL_LENGTH +
+		CALIB_RATIONAL_MODEL +
+		CALIB_FIX_K3 + CALIB_FIX_K4 + CALIB_FIX_K5,
+		TermCriteria(TermCriteria::COUNT + TermCriteria::EPS, 100, 1e-5));*/
+	cout << "Stereo Calibration done with RMS error=" << rms << endl;
+	cout << "Saving Stereo Calibration Files=" << rms << endl;
+
+	//cv::FileStorage fs1(out_file, cv::FileStorage::WRITE);
+	//fs1 << "K1" << K1;
+	//fs1 << "K2" << K2;
+	//fs1 << "D1" << D1;
+	//fs1 << "D2" << D2;
+	//fs1 << "R" << R;
+	//fs1 << "T" << T;
+	//fs1 << "E" << E;
+	//fs1 << "F" << F;
+
+	 // save intrinsic parameters
+	FileStorage fs(outputFolder + "/" + "Stereo_intrinsics.yml", FileStorage::WRITE);
+	if (fs.isOpened())
+	{
+		fs << "M1" << cameraMatrix << "D1" << distCoeffs <<
+			"M2" << cameraMatrix1 << "D2" << distCoeffs1;
+		fs.release();
+	}
+	else
+		cout << "Error: can not save the intrinsic parameters\n";
+
+
+
+	Mat R1, R2, P1, P2, Q;
+	Rect validRoi[2];
+
+	stereoRectify(cameraMatrix, distCoeffs,
+		cameraMatrix1, distCoeffs1,
+		imgSize0, R, T, R1, R2, P1, P2, Q,
+		CALIB_ZERO_DISPARITY, 1, imgSize0, &validRoi[0], &validRoi[1]);
+
+	fs.open(outputFolder + "/" + "Stereo_extrinsics.yml", FileStorage::WRITE);
+	if (fs.isOpened())
+	{
+		fs << "R" << R << "T" << T << "R1" << R1 << "R2" << R2 << "P1" << P1 << "P2" << P2 << "Q" << Q;
+		fs.release();
+	}
+	else
+		cout << "Error: can not save the extrinsic parameters\n";
+
+	//This is the main file we want to get out of this program for the Structured Light Decoding
+	bool saveOkStereo = saveCameraParamsStereo(outputFolder + "/" + "stereoCalibrationParameters_camAcamB.yml", imgSize0, imgSize1, aspectRatio, aspectRatio1, calibrationFlags, calibrationFlags1,
+		cameraMatrix, cameraMatrix1, distCoeffs, distCoeffs1, repError,repError1, R, T, rms);
+
+
+	// show interpolated charuco corners for debugging
+	if (showChessboardCorners) {
+		for (unsigned int frame = 0; frame < filteredImages.size(); frame++) {
+			Mat imageCopy = filteredImages[frame].clone();
+			if (allIds0[frame].size() > 0) {
+
+				if (allCharucoCorners[frame].total() > 0) {
+					aruco::drawDetectedCornersCharuco(imageCopy, allCharucoCorners[frame],
+						allCharucoIds[frame]);
+				}
+			}
+
+			imshow("View Finals_CamA", imageCopy);
+			//imshow("View Finals_CamB", imageCopy1);
+
+			char key = (char)waitKey(0);
+			if (key == 27) break;
+		}
+	}
 
 	inputVideoA.release();
 	inputVideoB.release();
