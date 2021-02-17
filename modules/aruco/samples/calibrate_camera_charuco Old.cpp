@@ -624,22 +624,22 @@ int main(int argc, char* argv[]) {
 		return 0;
 	}
 
-	Mat cameraMatrix, distCoeffs;
-	vector< Mat > rvecs, tvecs;
-	double repError;
+	Mat cameraMatrixA, distCoeffsA;
+	vector< Mat > rvecsA, tvecsA;
+	double repErrorA;
 
-	Mat cameraMatrix1, distCoeffs1;
-	vector< Mat > rvecs1, tvecs1;
-	double repError1;
+	Mat cameraMatrixB, distCoeffsB;
+	vector< Mat > rvecsB, tvecsB;
+	double repErrorB;
 
 	if (calibrationFlags & CALIB_FIX_ASPECT_RATIO) {
-		cameraMatrix = Mat::eye(3, 3, CV_64F);
-		cameraMatrix.at< double >(0, 0) = aspectRatio;
+		cameraMatrixA = Mat::eye(3, 3, CV_64F);
+		cameraMatrixA.at< double >(0, 0) = aspectRatio;
 	}
 
 	if (calibrationFlags1 & CALIB_FIX_ASPECT_RATIO) {
-		cameraMatrix1 = Mat::eye(3, 3, CV_64F);
-		cameraMatrix1.at< double >(0, 0) = aspectRatio1;
+		cameraMatrixB = Mat::eye(3, 3, CV_64F);
+		cameraMatrixB.at< double >(0, 0) = aspectRatio1;
 	}
 
 	// prepare data for calibration
@@ -672,13 +672,13 @@ int main(int argc, char* argv[]) {
 	// calibrate camera using aruco markers
 	double arucoRepErr;
 	arucoRepErr = aruco::calibrateCameraAruco(allCornersConcatenated, allIdsConcatenated,
-		markerCounterPerFrame, board0, imgSize0, cameraMatrix,
-		distCoeffs, noArray(), noArray(), calibrationFlags);
+		markerCounterPerFrame, board0, imgSize0, cameraMatrixA,
+		distCoeffsA, noArray(), noArray(), calibrationFlags);
 
 	double arucoRepErr1;
 	arucoRepErr1 = aruco::calibrateCameraAruco(allCornersConcatenated1, allIdsConcatenated1,
-		markerCounterPerFrame1, board1, imgSize1, cameraMatrix1,
-		distCoeffs1, noArray(), noArray(), calibrationFlags1);
+		markerCounterPerFrame1, board1, imgSize1, cameraMatrixB,
+		distCoeffsB, noArray(), noArray(), calibrationFlags1);
 
 	// prepare data for charuco calibration
 	int nFrames = (int)allCorners0.size();
@@ -700,8 +700,8 @@ int main(int argc, char* argv[]) {
 		// interpolate using camera parameters
 		Mat currentCharucoCorners, currentCharucoIds;
 		aruco::interpolateCornersCharuco(allCorners0[i], allIds0[i], allImgs0[i], charucoboard0,
-			currentCharucoCorners, currentCharucoIds, cameraMatrix,
-			distCoeffs);
+			currentCharucoCorners, currentCharucoIds, cameraMatrixA,
+			distCoeffsA);
 
 		allCharucoCorners.push_back(currentCharucoCorners);
 		allCharucoIds.push_back(currentCharucoIds);
@@ -712,8 +712,8 @@ int main(int argc, char* argv[]) {
 		// interpolate using camera parameters
 		Mat currentCharucoCorners1, currentCharucoIds1;
 		aruco::interpolateCornersCharuco(allCorners1[i], allIds1[i], allImgs1[i], charucoboard1,
-			currentCharucoCorners1, currentCharucoIds1, cameraMatrix1,
-			distCoeffs);
+			currentCharucoCorners1, currentCharucoIds1, cameraMatrixB,
+			distCoeffsA);
 
 		allCharucoCorners1.push_back(currentCharucoCorners1);
 		allCharucoIds1.push_back(currentCharucoIds1);
@@ -731,19 +731,19 @@ int main(int argc, char* argv[]) {
 	}
 
 	// calibrate camera using charuco
-	repError =
+	repErrorA =
 		aruco::calibrateCameraCharuco(allCharucoCorners, allCharucoIds, charucoboard0, imgSize0,
-			cameraMatrix, distCoeffs, rvecs, tvecs, calibrationFlags);
+			cameraMatrixA, distCoeffsA, rvecsA, tvecsA, calibrationFlags);
 
-	repError1 =
+	repErrorB =
 		aruco::calibrateCameraCharuco(allCharucoCorners1, allCharucoIds1, charucoboard1, imgSize1,
-			cameraMatrix1, distCoeffs1, rvecs1, tvecs1, calibrationFlags1);
+			cameraMatrixB, distCoeffsB, rvecsB, tvecsB, calibrationFlags1);
 
 	bool saveOk = saveCameraParams(outputFolder + "/" + "_CamA.yml", imgSize0, aspectRatio, calibrationFlags,
-		cameraMatrix, distCoeffs, repError);
+		cameraMatrixA, distCoeffsA, repErrorA);
 
 	bool saveOk1 = saveCameraParams(outputFolder + "/" + "_CamB.yml", imgSize1, aspectRatio1, calibrationFlags1,
-		cameraMatrix1, distCoeffs1, repError1);
+		cameraMatrixB, distCoeffsB, repErrorB);
 
 	if (!saveOk) {
 		cerr << "Cannot save output file CAMA" << endl;
@@ -755,11 +755,11 @@ int main(int argc, char* argv[]) {
 		return 0;
 	}
 
-	cout << "CamA Rep Error: " << repError << endl;
+	cout << "CamA Rep Error: " << repErrorA << endl;
 	cout << "CamA Rep Error Aruco: " << arucoRepErr << endl;
 	cout << "CamA Calibration saved to " << outputFolder + "_CamA.yml" << endl;
 
-	cout << "CamB Rep Error: " << repError1 << endl;
+	cout << "CamB Rep Error: " << repErrorB << endl;
 	cout << "CamB Rep Error Aruco: " << arucoRepErr1 << endl;
 	cout << "CamB Calibration saved to " << outputFolder + "_CamB.yml" << endl;
 	/*Perform Stereo Calibration Steps*/
@@ -788,8 +788,8 @@ int main(int argc, char* argv[]) {
 	
 
 	double rms = stereoCalibrate(object_points, allCharucoCorners, allCharucoCorners1,
-		cameraMatrix, distCoeffs,
-		cameraMatrix1, distCoeffs1,
+		cameraMatrixA, distCoeffsA,
+		cameraMatrixB, distCoeffsB,
 		imgSize0, R, T, E, F);
 
 
@@ -805,8 +805,8 @@ int main(int argc, char* argv[]) {
 		CALIB_RATIONAL_MODEL +
 		CALIB_FIX_K3 + CALIB_FIX_K4 + CALIB_FIX_K5,
 		TermCriteria(TermCriteria::COUNT + TermCriteria::EPS, 100, 1e-5));*/
-	cout << "Stereo Calibration done with RMS error=" << rms << endl;
-	cout << "Saving Stereo Calibration Files=" << rms << endl;
+	cout << "Stereo Calibration done with RMS error= " << rms << endl;
+	cout << "Saving Stereo Calibration Files= " << rms << endl;
 
 	//cv::FileStorage fs1(out_file, cv::FileStorage::WRITE);
 	//fs1 << "K1" << K1;
@@ -822,8 +822,8 @@ int main(int argc, char* argv[]) {
 	FileStorage fs(outputFolder + "/" + "Stereo_intrinsics.yml", FileStorage::WRITE);
 	if (fs.isOpened())
 	{
-		fs << "M1" << cameraMatrix << "D1" << distCoeffs <<
-			"M2" << cameraMatrix1 << "D2" << distCoeffs1;
+		fs << "M1" << cameraMatrixA << "D1" << distCoeffsA <<
+			"M2" << cameraMatrixB << "D2" << distCoeffsB;
 		fs.release();
 	}
 	else
@@ -834,8 +834,8 @@ int main(int argc, char* argv[]) {
 	Mat R1, R2, P1, P2, Q;
 	Rect validRoi[2];
 
-	stereoRectify(cameraMatrix, distCoeffs,
-		cameraMatrix1, distCoeffs1,
+	stereoRectify(cameraMatrixA, distCoeffsA,
+		cameraMatrixB, distCoeffsB,
 		imgSize0, R, T, R1, R2, P1, P2, Q,
 		CALIB_ZERO_DISPARITY, 1, imgSize0, &validRoi[0], &validRoi[1]);
 
@@ -850,7 +850,7 @@ int main(int argc, char* argv[]) {
 
 	//This is the main file we want to get out of this program for the Structured Light Decoding
 	bool saveOkStereo = saveCameraParamsStereo(outputFolder + "/" + "stereoCalibrationParameters_camAcamB.yml", imgSize0, imgSize1, aspectRatio, aspectRatio1, calibrationFlags, calibrationFlags1,
-		cameraMatrix, cameraMatrix1, distCoeffs, distCoeffs1, repError,repError1, R, T, rms);
+		cameraMatrixA, cameraMatrixB, distCoeffsA, distCoeffsB, repErrorA,repErrorB, R, T, rms);
 
 
 	// show interpolated charuco corners for debugging

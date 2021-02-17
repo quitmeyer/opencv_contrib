@@ -53,22 +53,18 @@ using namespace cv;
 #define KEY_LEFT 75
 #define KEY_RIGHT 77
 
+// THIS VERSION IS FOR CHESSBOARDS ONLY- SORRY IM SLOPPY WITH CODE
+
 namespace {
 	const char* about =
-		"Calibration using a ChArUco board\n"
+		"Calibration using a CHESS board\n"
 		"  To capture a frame for calibration, press 'c',\n"
 		"  If input comes from video, press any key for next frame\n"
 		"  To finish capturing, press 'ESC' key and calibration starts.\n";
 	const char* keys =
-		"{w        |       | Number of squares in X direction }"
-		"{h        |       | Number of squares in Y direction }"
-		"{sl       |       | Square side length (in meters) }"
-		"{ml       |       | Marker side length (in meters) }"
-		"{d        |       | dictionary: DICT_4X4_50=0, DICT_4X4_100=1, DICT_4X4_250=2,"
-		"DICT_4X4_1000=3, DICT_5X5_50=4, DICT_5X5_100=5, DICT_5X5_250=6, DICT_5X5_1000=7, "
-		"DICT_6X6_50=8, DICT_6X6_100=9, DICT_6X6_250=10, DICT_6X6_1000=11, DICT_7X7_50=12,"
-		"DICT_7X7_100=13, DICT_7X7_250=14, DICT_7X7_1000=15, DICT_ARUCO_ORIGINAL = 16}"
-		"{@outfolder |<none> | Output folder to create files of calibrated camera parameters }"
+		"{w        |   7    | Number of squares in X direction }"
+		"{h        |    6   | Number of squares in Y direction }"
+		"{sl       |    5   | Square side length (in meters) }"
 		"{v        |       | Input from video file, if ommited, input comes from camera }"
 
 		"{ciA       | 1     | Camera id if input doesnt come from video (-v) }"
@@ -160,7 +156,7 @@ static bool saveCameraParams(const string& filename, Size imageSize, float aspec
 
 static bool saveCameraParamsStereo(const string& filename, Size imageSize, Size imageSize1, float aspectRatio, float aspectRatio1, int flags, int flags1,
 	const Mat& cameraMatrix, const Mat& cameraMatrix1, const Mat& distCoeffs, const Mat& distCoeffs1, double totalAvgErr, double totalAvgErr1,
-	 Mat R, Mat T, double StereoRMS) {
+	Mat R, Mat T, double StereoRMS) {
 	FileStorage fs(filename, FileStorage::WRITE);
 	if (!fs.isOpened())
 		return false;
@@ -227,7 +223,7 @@ int main(int argc, char* argv[]) {
 
 
 	//time_t start, end;
-	double realfps=1;
+	double realfps = 1;
 
 	CommandLineParser parser(argc, argv, keys);
 	parser.about(about);
@@ -240,49 +236,20 @@ int main(int argc, char* argv[]) {
 	int squaresX = parser.get<int>("w");
 	int squaresY = parser.get<int>("h");
 	float squareLength = parser.get<float>("sl");
-	float markerLength = parser.get<float>("ml");
-	int dictionaryId = parser.get<int>("d");
-	string outputFolder = parser.get<string>(0);
-
+	//string outputFolder = parser.get<string>("output");
+	string outputFolder = "C:/Users/andre/Desktop/Glowcake Hoss/Calibrations/OutputCharuco";
 	bool showChessboardCorners = parser.get<bool>("sc");
 
-	int calibrationFlags = 0;
-	int calibrationFlags1 = 0;
+	int calibrationFlagsA = 0;
+	int calibrationFlagsB = 0;
 
 	float aspectRatio = 1;
 	float aspectRatio1 = 1;
 
-	if (parser.has("a0")) {
-		calibrationFlags |= CALIB_FIX_ASPECT_RATIO;
-		aspectRatio = parser.get<float>("a0");
-	}
-	if (parser.has("a1")) {
-		calibrationFlags1 |= CALIB_FIX_ASPECT_RATIO;
-		aspectRatio1 = parser.get<float>("a1");
-	}
-	if (parser.get<bool>("zt0")) calibrationFlags |= CALIB_ZERO_TANGENT_DIST;
-	if (parser.get<bool>("pc0")) calibrationFlags |= CALIB_FIX_PRINCIPAL_POINT;
 
-	if (parser.get<bool>("zt1")) calibrationFlags1 |= CALIB_ZERO_TANGENT_DIST;
-	if (parser.get<bool>("pc1")) calibrationFlags1 |= CALIB_FIX_PRINCIPAL_POINT;
-
-	Ptr<aruco::DetectorParameters> detectorParams = aruco::DetectorParameters::create();
-	if (parser.has("dp")) {
-		bool readOk = readDetectorParameters(parser.get<string>("dp"), detectorParams);
-		if (!readOk) {
-			cerr << "Invalid detector parameters file" << endl;
-			return 0;
-		}
-	}
-
-	bool refindStrategy = parser.get<bool>("rs");
 	int camIdA = parser.get<int>("ciA");
 	int camIdB = parser.get<int>("ciB");
 	String video;
-
-	if (parser.has("v")) {
-		video = parser.get<String>("v");
-	}
 
 	if (!parser.check()) {
 		parser.printErrors();
@@ -318,9 +285,9 @@ int main(int argc, char* argv[]) {
 
 	//inputVideoA.set(CAP_PROP_FOURCC, VideoWriter::fourcc('H' , '2', '6', '4'));			//Camera Settings Dialog
 
-	inputVideoA.set(CAP_PROP_SETTINGS,0); //This pops up the nice dialog to keep camera settings persistent. You need directshow DSHOW enabled as the capturer, and you need a number here that doesn't do anything but you have to have it there
+	inputVideoA.set(CAP_PROP_SETTINGS, 0); //This pops up the nice dialog to keep camera settings persistent. You need directshow DSHOW enabled as the capturer, and you need a number here that doesn't do anything but you have to have it there
 	inputVideoB.set(CAP_PROP_SETTINGS, 0);
-	inputVideoA.set(CAP_PROP_MONOCHROME,1);
+	inputVideoA.set(CAP_PROP_MONOCHROME, 1);
 
 	//inputVideo0.set(CAP_PROP_AUTO_EXPOSURE, .25);
 	//inputVideo1.set(CAP_PROP_AUTO_EXPOSURE, .1);
@@ -344,115 +311,162 @@ int main(int argc, char* argv[]) {
 	inputVideoB.set(CAP_PROP_FRAME_HEIGHT, 2448);
 	/**/
 
-	
-	
+
+
 
 	cout << "Cameras Started" << endl;
-	cout << "Cameras A Properties " << " ID num " << camIdA <<" exposure "<< inputVideoA.get(CAP_PROP_EXPOSURE)<< "  Backend API " << inputVideoA.get(CAP_PROP_BACKEND) << "  Width and Height "<< inputVideoA.get(CAP_PROP_FRAME_WIDTH) << " " << inputVideoA.get(CAP_PROP_FRAME_HEIGHT) << endl;
-	cout << "Cameras B Properties " << " ID num " << camIdB << " exposure "  << inputVideoB.get(CAP_PROP_EXPOSURE)  << "  Width and Height " << inputVideoB.get(CAP_PROP_FRAME_WIDTH) << " " << inputVideoB.get(CAP_PROP_FRAME_HEIGHT) << endl;
+	cout << "Cameras A Properties " << " ID num " << camIdA << " exposure " << inputVideoA.get(CAP_PROP_EXPOSURE) << "  Backend API " << inputVideoA.get(CAP_PROP_BACKEND) << "  Width and Height " << inputVideoA.get(CAP_PROP_FRAME_WIDTH) << " " << inputVideoA.get(CAP_PROP_FRAME_HEIGHT) << endl;
+	cout << "Cameras B Properties " << " ID num " << camIdB << " exposure " << inputVideoB.get(CAP_PROP_EXPOSURE) << "  Width and Height " << inputVideoB.get(CAP_PROP_FRAME_WIDTH) << " " << inputVideoB.get(CAP_PROP_FRAME_HEIGHT) << endl;
 
 
-	Ptr<aruco::Dictionary> dictionary =
-		aruco::getPredefinedDictionary(aruco::PREDEFINED_DICTIONARY_NAME(dictionaryId));
-
-	// create charuco board object
-	Ptr<aruco::CharucoBoard> charucoboard0 =
-		aruco::CharucoBoard::create(squaresX, squaresY, squareLength, markerLength, dictionary);
-	Ptr<aruco::Board> board0 = charucoboard0.staticCast<aruco::Board>();
-
-
-
-	Ptr<aruco::CharucoBoard> charucoboard1 =
-		aruco::CharucoBoard::create(squaresX, squaresY, squareLength, markerLength, dictionary);
-	Ptr<aruco::Board> board1 = charucoboard1.staticCast<aruco::Board>();
 
 
 	// collect data from each frame
-	vector< vector< vector< Point2f > > > allCorners0;
+	vector< vector< Point2f > >  imagePointsA, imagePointsB;
 	vector< vector< vector< Point2f > > > allCorners1;
 
-	vector< vector< int > > allIds0;
+	vector< vector< Point3f > > objectPointsA, objectPointsB;
 	vector< vector< int > > allIds1;
 
-	vector< Mat > allImgs0;
-	vector< Mat > allImgs1;
+	vector< Mat > allImgsA;
+	vector< Mat > allImgsB;
 
-	Size imgSize0;
-	Size imgSize1;
+	Size imgSizeA;
+	Size imgSizeB;
 	cout << "Create Windows" << endl;
 
 	namedWindow("CamA_StereoCalib_Output", WINDOW_KEEPRATIO);
-    moveWindow("CamA_StereoCalib_Output", 0, 10);
+	moveWindow("CamA_StereoCalib_Output", 0, 10);
 	resizeWindow("CamA_StereoCalib_Output", 1920, 540);
 
-	/*namedWindow("CamB_StereoCalib_Output", WINDOW_KEEPRATIO);
-    moveWindow("CamB_StereoCalib_Output", 960, 10);
-	resizeWindow("CamB_StereoCalib_Output", 960, 540);
-	*/
+
 
 	cout << "Intialize Boards" << endl;
+	//Set up Chessboard Detection
+	Size board_size = Size(squaresX, squaresY);
+	cout << "board is " << squaresX << "  by  " << squaresY << endl;
 
-	int totalCorners = charucoboard0->chessboardCorners.size();
-	cout << "total corners " << totalCorners << endl;
 
 	int framenum = 0;
 
 	//This is the main video-grabbing loop
-	while (inputVideoA.grab() && inputVideoB.grab()) // grab frams at the same time! for multicam
+	while (1) //inputVideoA.grab() && inputVideoB.grab()) // grab frams at the same time! for multicam
 	{
-	
-		//Start the FPS timer
+		//while(1){
+			//Start the FPS timer
 		int64 tickstart = cv::getTickCount();
-		
-		Mat imageA, imageCopyA;
-		inputVideoA.retrieve(imageA);
 
-		Mat imageB, imageCopyB;
-		inputVideoB.retrieve(imageB);
+		Mat imageA, imageCopyLowResA, grayA;
 
+		if (inputVideoA.isOpened())
+		{
+			Mat viewA;
+			inputVideoA >> viewA;
+			viewA.copyTo(imageA);
+		}
 
-		
-		imageA.copyTo(imageCopyA);
-		imageB.copyTo(imageCopyB);
+		//inputVideoA.retrieve(imageA);
 
-		
-		//Draw Charuco markers
+		Mat imageB, imageCopyLowResB, grayB;
+		if (inputVideoB.isOpened())
+		{
+			Mat viewB;
+			inputVideoB >> viewB;
+			viewB.copyTo(imageB);
+		}
 
-	
-			/**/
-		//Shrink the Image for Display purposes
+		//inputVideoB.retrieve(imageB);
+
+		//inputVideoA >> imageA;
+		//inputVideoB >> imageB;
+
+		vector< int > ids;
+		vector< Point2f > cornersA, cornersB, rejected;
+
+		vector< int > ids1;
+		vector< vector< Point2f > > corners1, rejected1;
+
+		//MAKE GRAYSCALE FOR CornerSubPix PERFORMANCE
+		//cvtColor(imageA, grayA, COLOR_BGR2GRAY);
+		//cvtColor(imageB, grayB, COLOR_BGR2GRAY);
+
+		//First search for corners at LOW RES while live streaming
+
+			//Shrink the Image for Display purposes
 		Size showsize;
-		showsize=  Size(960,540);
+		//showsize = Size(960, 540);
+		showsize = Size(640, 480);
 
-		resize(imageCopyA, imageCopyA, showsize, 0, 0);
-		resize(imageCopyB, imageCopyB, showsize, 0, 0);
+		imageA.copyTo(imageCopyLowResA);
+		imageB.copyTo(imageCopyLowResB);
+		resize(imageCopyLowResA, imageCopyLowResA, showsize, 0, 0);
+		resize(imageCopyLowResB, imageCopyLowResB, showsize, 0, 0);
+
+
+
+		//Detect Chessboards
+
+		bool foundA = false;
+		foundA = cv::findChessboardCorners(imageCopyLowResA, board_size, cornersA, CALIB_CB_FAST_CHECK);
+
+		bool foundB = false;
+		foundB = cv::findChessboardCorners(imageCopyLowResB, board_size, cornersB,  CALIB_CB_FAST_CHECK );
+
+		//Display charuco
+
+
+		//Change the gray back to color
+	/*	cvtColor(imageCopyA, imageCopyA, COLOR_GRAY2BGR);
+		cvtColor(imageCopyB, imageCopyB, COLOR_GRAY2BGR);*/
+
+
+		if (foundA)
+		{
+			//cornerSubPix(grayA, corners, cv::Size(5, 5), cv::Size(-1, -1), 				TermCriteria(TermCriteria::EPS | TermCriteria::MAX_ITER, 30, 0.1));
+			drawChessboardCorners(imageCopyLowResA, board_size, cornersA, foundA);
+		}
+		if (foundB)
+		{
+			//	cornerSubPix(grayB, corners, cv::Size(5, 5), cv::Size(-1, -1), 				TermCriteria(TermCriteria::EPS | TermCriteria::MAX_ITER, 30, 0.1));
+			drawChessboardCorners(imageCopyLowResB, board_size, cornersB, foundB);
+		}
 
 		Scalar texColA = Scalar(255, 0, 0);
 		Scalar texColB = Scalar(255, 0, 0);
 
-		
-		putText(imageCopyA, "Cam A: Press 'c' to add current frame. 'ESC' to finish and calibrate",
+		if (!foundA) {
+			texColA = Scalar(0, 0, 255);
+			putText(imageCopyLowResA, "NOT ALL POINTS VISIBLE ",
+				Point(10, 100), FONT_HERSHEY_SIMPLEX, 1.4, texColA, 4);
+		}
+		putText(imageCopyLowResA, "Cam A: Press 'c' to add current frame. 'ESC' to finish and calibrate",
 			Point(10, 20), FONT_HERSHEY_SIMPLEX, .5, texColA, 2);
 
 
-	
-		putText(imageCopyB, "Cam B: 'c'=add current frame. 'ESC'= calibrate",
+		if (!foundB) {
+			texColB = Scalar(0, 0, 255);
+
+			putText(imageCopyLowResB, "NOT ALL POINTS VISIBLE ",
+				Point(10, 100), FONT_HERSHEY_SIMPLEX, 1.4, texColB, 2);
+		}
+		putText(imageCopyLowResB, "Cam B: 'c'=add current frame. 'ESC'= calibrate",
 			Point(10, 20), FONT_HERSHEY_SIMPLEX, .5, texColB, 2);
 
 
 		//Show the FPS
-		putText(imageCopyA, "FPS: " + to_string(realfps),
+		putText(imageCopyLowResA, "FPS: " + to_string(realfps),
 			Point(10, 400), FONT_HERSHEY_SIMPLEX, 1, texColA, 2);
-		putText(imageCopyB, "FPS: " + to_string(realfps),
+		putText(imageCopyLowResB, "FPS: " + to_string(realfps),
 			Point(10, 400), FONT_HERSHEY_SIMPLEX, 1, texColA, 2);
 
 		//TODO scale these windows to be more manageable sizes
-
-		hconcat(imageCopyA, imageCopyB, imageCopyA);
-		imshow("CamA_StereoCalib_Output", imageCopyA);
+		//Put windows next to each other
+		hconcat(imageCopyLowResA, imageCopyLowResB, imageCopyLowResA);
+		imshow("CamA_StereoCalib_Output", imageCopyLowResA);
 
 		//imshow("CamB_StereoCalib_Output", imageCopyB);
 
+		//HANDLE INPUT 
 
 		char key = (char)waitKey(waitTime);
 
@@ -461,14 +475,14 @@ int main(int argc, char* argv[]) {
 		//Change Camera around if we need
 		if (key == '0') {
 			inputVideoA.open(0);
-			cout << "Changed CamA to Input 0 "  << endl;
+			cout << "Changed CamA to Input 0 " << endl;
 
 		}
 		if (key == '1') {
 			inputVideoA.open(1);
 			cout << "Changed CamA to Input 1 " << endl;
 
-					}
+		}
 		if (key == '2') {
 			inputVideoA.open(2);
 			cout << "Changed CamA to Input 2 " << endl;
@@ -496,19 +510,34 @@ int main(int argc, char* argv[]) {
 
 		}
 
-		
-		if (key == 'c') {
-			cout << "Frame "<< framenum <<" captured camA" << endl;
-			
-			allImgs0.push_back(imageA);
-			imgSize0 = imageA.size();
+		if (key == 'c' && (!foundA || !foundB)) {
 
-			
-				cout << "Frame captured camB" << endl;
-			
-				allImgs1.push_back(imageB);
-				imgSize1 = imageB.size();
-		
+			cout << "Frame Not Captured, Please make sure all IDs are visible!" << endl;
+
+
+		}
+
+		if (key == 'c' && foundA && foundB) {
+
+
+			//Process the Captured Frame Chess corners
+
+
+
+			cout << "Frame " << framenum << " captured camA" << endl;
+
+			allImgsA.push_back(imageA);
+			imgSizeA = imageA.size();
+
+
+
+			//Cam B
+
+			cout << "Frame captured camB" << endl;
+
+			allImgsB.push_back(imageB);
+			imgSizeB = imageB.size();
+
 			framenum++;
 
 		}
@@ -520,17 +549,28 @@ int main(int argc, char* argv[]) {
 
 	}
 
-	cout << "Saving All images" << endl;
+	/*
 
+	PROCESS STAGE
+
+	*/
+
+	//Kill the Cameras
+
+	inputVideoA.release();
+	inputVideoB.release();
+
+	//Save all the Images, keep them in the vault
+	cout << "Saving All images" << endl;
 
 	bool save1 = false;
 	bool save2 = false;
 
-	for (int i = 0; i < allImgs0.size(); i++) {
+	for (int i = 0; i < allImgsA.size(); i++) {
 		ostringstream name;
 		name << i + 1;
-		save1 = imwrite(outputFolder + "/" + "camA_im" + name.str() + ".png", allImgs0[i]);
-		save2 = imwrite(outputFolder + "/" + "camB_im" + name.str() + ".png", allImgs1[i]);
+		save1 = imwrite(outputFolder + "/" + "camA_im" + name.str() + ".png", allImgsA[i]);
+		save2 = imwrite(outputFolder + "/" + "camB_im" + name.str() + ".png", allImgsB[i]);
 		if ((save1) && (save2))
 		{
 			cout << "pattern camA and camB images number " << i + 1 << " saved" << endl << endl;
@@ -542,16 +582,198 @@ int main(int argc, char* argv[]) {
 		}
 	}
 
+	vector< Point2f > cornersA, cornersB;
+
+	//Calibrate those chessboards individually!
+	cout << "Calibrating Cam A and Cam B at Full Resolution" << endl;
+	for (int i = 0; i < allImgsA.size(); i++) {
+
+		//Show images as processing for debugging
+		Size showsize;
+		//showsize = Size(960, 540);
+		showsize = Size(640, 480);
+		Mat imageCopyLowResA, imageCopyLowResB;
+
+		allImgsA[i].copyTo(imageCopyLowResA);
+		allImgsB[i].copyTo(imageCopyLowResB);
+		resize(imageCopyLowResA, imageCopyLowResA, showsize, 0, 0);
+		resize(imageCopyLowResB, imageCopyLowResB, showsize, 0, 0);
+
+		hconcat(imageCopyLowResA, imageCopyLowResB, imageCopyLowResA);
+		imshow("DebugViewCamA_StereoCalib_Output", imageCopyLowResA);
+
+		bool foundAFull = false;
+		foundAFull = cv::findChessboardCorners(allImgsA[i], board_size, cornersA, CALIB_CB_FAST_CHECK ); //CALIB_CB_ADAPTIVE_THRESH | | CALIB_CB_NORMALIZE_IMAGE
+
+		bool foundBFull = false;
+		foundBFull = cv::findChessboardCorners(allImgsB[i], board_size, cornersB,CALIB_CB_FAST_CHECK );
+
+
+		if (!foundAFull || !foundBFull) //skip if we dont get a chessboard, extra check
+		{
+
+			cout << "error on captured frame, no chessboard  " << i << " found a and b   " << foundAFull << foundBFull << endl;
+
+			//drawChessboardCorners(imageCopyLowResA, board_size, cornersA, foundA);
+		}
+		else
+		{
+			cout << "Found Board  " << i << endl;
+
+			Mat grayA, grayB;
+
+			cvtColor(allImgsA[i], grayA, COLOR_BGR2GRAY);
+			cvtColor(allImgsB[i], grayB, COLOR_BGR2GRAY);
+			cornerSubPix(grayA, cornersA, cv::Size(5, 5), cv::Size(-1, -1), TermCriteria(TermCriteria::EPS | TermCriteria::MAX_ITER, 30, 0.1));
+			cornerSubPix(grayB, cornersB, cv::Size(5, 5), cv::Size(-1, -1), TermCriteria(TermCriteria::EPS | TermCriteria::MAX_ITER, 30, 0.1));
+
+			//Chessboard object
+			vector< Point3f > obj;
+			for (int i = 0; i < squaresY; i++)
+				for (int j = 0; j < squaresX; j++)
+					obj.push_back(Point3f((float)j * squareLength, (float)i * squareLength, 0));
+
+			//Save all the points of this frame
+			imagePointsA.push_back(cornersA);
+			objectPointsA.push_back(obj);
+
+			imagePointsB.push_back(cornersB);
+			objectPointsB.push_back(obj);
+
+			cout << " Success processed frame  " << i << endl;
+
+		}
+
+	}
+
+	//Calibrate each camera based on the detected points
+
+	Mat cameraMatrixA, distCoeffsA;
+	vector< Mat > rvecsA, tvecsA;
+	double repErrorA;
+
+	Mat cameraMatrixB, distCoeffsB;
+	vector< Mat > rvecsB, tvecsB;
+	double repErrorB;
+
+	if (calibrationFlagsA & CALIB_FIX_ASPECT_RATIO) {
+		cameraMatrixA = Mat::eye(3, 3, CV_64F);
+		cameraMatrixA.at< double >(0, 0) = aspectRatio;
+	}
+
+	if (calibrationFlagsB & CALIB_FIX_ASPECT_RATIO) {
+		cameraMatrixB = Mat::eye(3, 3, CV_64F);
+		cameraMatrixB.at< double >(0, 0) = aspectRatio1;
+	}
+
+
+	int flag = 0;
+	flag |= CALIB_FIX_K4;
+	flag |= CALIB_FIX_K5;
+
+	repErrorA = calibrateCamera(objectPointsA, imagePointsA, allImgsA[0].size(), cameraMatrixA, distCoeffsA, rvecsA, tvecsA, flag);
+
+	cout << "Cam Matrix A:  " << cameraMatrixA << "  Calibration error Cam A: " << repErrorA << endl;
+
+	repErrorB = calibrateCamera(objectPointsB, imagePointsB, allImgsB[0].size(), cameraMatrixB, distCoeffsB, rvecsB, tvecsB, flag);
+
+	cout << "Cam Matrix B:  " << cameraMatrixB << "  Calibration error Cam A: " << repErrorB << endl;
+
+
+	//Save Files
+	bool saveOk = saveCameraParams(outputFolder + "/" + "_CamA.yml", imgSizeA, aspectRatio, calibrationFlagsA,
+		cameraMatrixA, distCoeffsA, repErrorA);
+
+	bool saveOk1 = saveCameraParams(outputFolder + "/" + "_CamB.yml", imgSizeB, aspectRatio1, calibrationFlagsB,
+		cameraMatrixB, distCoeffsB, repErrorB);
+
+	if (!saveOk) {
+		cerr << "Cannot save output file CAMA" << endl;
+		return 0;
+	}
+
+	if (!saveOk1) {
+		cerr << "Cannot save output file CAMB" << endl;
+		return 0;
+	}
+
+	cout << "CamA Rep Error: " << repErrorA << endl;
+	cout << "CamA Calibration saved to " << outputFolder + "_CamA.yml" << endl;
+
+	cout << "CamB Rep Error: " << repErrorB << endl;
+	cout << "CamB Calibration saved to " << outputFolder + "_CamB.yml" << endl;
+
+
+	//Perform the Stereo Calibration between the Cameras
+
+	cout << "Starting STEREO CALIBRATION Steps " << endl;
+
+	/* STEREO CALIBRATION
+
+	*/
+
+	Mat R, T, E, F;
+
+	//vector< vector< Point3f > > object_points;
+	vector< Point2f > corners1, corners2;
+	vector< vector< Point2f > > left_img_points, right_img_points;
+	vector< Point3f > obj;
 
 
 
-	cout << "Finished Saving Images" << endl;
 
-	
+	//Question: does Stereocalibrate also do the individual calibration?
+	double rms = stereoCalibrate(objectPointsA, imagePointsA, imagePointsB,
+		cameraMatrixA, distCoeffsA,
+		cameraMatrixB, distCoeffsB,
+		imgSizeA, R, T, E, F);
 
-	inputVideoA.release();
-	inputVideoB.release();
 
-		destroyAllWindows();
+	//SAVE ALL THE STEREO DATA
+
+	cout << "Stereo Calibration done with RMS error=" << rms << endl;
+	cout << "Saving Stereo Calibration Files" << endl;
+	// save intrinsic parameters
+	FileStorage fs(outputFolder + "/" + "Stereo_intrinsics.yml", FileStorage::WRITE);
+	if (fs.isOpened())
+	{
+		fs << "M1" << cameraMatrixA << "D1" << distCoeffsA <<
+			"M2" << cameraMatrixB << "D2" << distCoeffsB;
+		fs.release();
+	}
+	else
+		cout << "Error: can not save the intrinsic parameters\n";
+
+
+	printf("Starting Stereo Rectification\n");
+	Mat R1, R2, P1, P2, Q;
+	Rect validRoi[2];
+
+	stereoRectify(cameraMatrixA, distCoeffsA,
+		cameraMatrixB, distCoeffsB,
+		imgSizeA, R, T, R1, R2, P1, P2, Q,
+		CALIB_ZERO_DISPARITY, 1, imgSizeA, &validRoi[0], &validRoi[1]);
+
+	fs.open(outputFolder + "/" + "Stereo_extrinsics.yml", FileStorage::WRITE);
+	if (fs.isOpened())
+	{
+		fs << "R" << R << "T" << T << "R1" << R1 << "R2" << R2 << "P1" << P1 << "P2" << P2 << "Q" << Q;
+		fs.release();
+	}
+	else
+		cout << "Error: can not save the extrinsic parameters\n";
+
+	//This is the main file we want to get out of this program for the Structured Light Decoding
+	bool saveOkStereo = saveCameraParamsStereo(outputFolder + "/" + "stereoCalibrationParameters_camAcamB.yml", imgSizeA, imgSizeB, aspectRatio, aspectRatio1, calibrationFlagsA, calibrationFlagsB,
+		cameraMatrixA, cameraMatrixB, distCoeffsA, distCoeffsB, repErrorA, repErrorB, R, T, rms);
+
+	printf("Done Stereo Rectification\n");
+
+
+
+
+
+
+	destroyAllWindows();
 	return 0;
 }
