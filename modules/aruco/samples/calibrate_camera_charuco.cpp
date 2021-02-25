@@ -81,7 +81,15 @@ namespace {
 		"{pc0       | false | Fix the principal point at the center }"
 		"{pc1       | false | Fix the principal point at the center }"
 
-		"{sc       | false | Show detected chessboard corners after calibration }";
+		"{sc       | false | Show detected chessboard corners after calibration }"
+
+		"{loadNumImgs       | 46 | number of images to use in the Calibration from Files - If 0 use camera }"
+		"{camAfilename       | camA_im | number of images to use in the Calibration from Files }"
+		"{camBfilename       | camB_im | number of images to use in the Calibration from Files }"
+		"{fileExtension       | .png | number of images to use in the Calibration from Files }"
+
+
+		;
 }
 
 /**
@@ -251,341 +259,386 @@ int main(int argc, char* argv[]) {
 	int camIdB = parser.get<int>("ciB");
 	String video;
 
+	String camAfilename = parser.get<String>("camAfilename", true);
+	String camBfilename = parser.get<String>("camBfilename", true);
+	String fileExtension = parser.get<String>("fileExtension", true);
+
+	
+	int loadNumImgs = parser.get<float>("loadNumImgs");
+
+
 	if (!parser.check()) {
 		parser.printErrors();
 		return 0;
 	}
 
-	cout << "Initialize Params" << endl;
-
-
-	VideoCapture inputVideoA;
-	VideoCapture inputVideoB;
-
-	//inputVideoA = VideoCapture(0);
-	//inputVideoB = VideoCapture(0);
-
-	int waitTime;
-	if (!video.empty()) {
-		inputVideoA.open(video);
-		waitTime = 0;
-	}
-	else {
-		//inputVideoA.open(camIdA, CAP_DSHOW);
-		//inputVideoB.open(camIdB, CAP_DSHOW);
-		inputVideoA.open(camIdA);
-		inputVideoB.open(camIdB); //  runs a bit faster without DSHOW
-
-		/*inputVideoA.open(camIdA, CAP_FFMPEG);
-		inputVideoB.open(camIdB, CAP_ANY);*/
-
-		waitTime = 2;
-	}
-
-
-	//inputVideoA.set(CAP_PROP_FOURCC, VideoWriter::fourcc('H' , '2', '6', '4'));			//Camera Settings Dialog
-
-	inputVideoA.set(CAP_PROP_SETTINGS, 0); //This pops up the nice dialog to keep camera settings persistent. You need directshow DSHOW enabled as the capturer, and you need a number here that doesn't do anything but you have to have it there
-	inputVideoB.set(CAP_PROP_SETTINGS, 0);
-	inputVideoA.set(CAP_PROP_MONOCHROME, 1);
-
-	//inputVideo0.set(CAP_PROP_AUTO_EXPOSURE, .25);
-	//inputVideo1.set(CAP_PROP_AUTO_EXPOSURE, .1);
-
-	//inputVideoA.set(CAP_PROP_FPS, 5);
-
-	//inputVideoB.set(CAP_PROP_FPS, 5);
-
-
-	//Manually Set Camera Parameters
-	/**
-	inputVideoA.set(CAP_PROP_FRAME_WIDTH, 640);
-	inputVideoA.set(CAP_PROP_FRAME_HEIGHT, 480);
-	inputVideoB.set(CAP_PROP_FRAME_WIDTH, 640);
-	inputVideoB.set(CAP_PROP_FRAME_HEIGHT, 480);
-	/**/
-	/**/
-	inputVideoA.set(CAP_PROP_FRAME_WIDTH, 3264);
-	inputVideoA.set(CAP_PROP_FRAME_HEIGHT, 2448);
-	inputVideoB.set(CAP_PROP_FRAME_WIDTH, 3264);
-	inputVideoB.set(CAP_PROP_FRAME_HEIGHT, 2448);
-	/**/
-
-
-
-
-	cout << "Cameras Started" << endl;
-	cout << "Cameras A Properties " << " ID num " << camIdA << " exposure " << inputVideoA.get(CAP_PROP_EXPOSURE) << "  Backend API " << inputVideoA.get(CAP_PROP_BACKEND) << "  Width and Height " << inputVideoA.get(CAP_PROP_FRAME_WIDTH) << " " << inputVideoA.get(CAP_PROP_FRAME_HEIGHT) << endl;
-	cout << "Cameras B Properties " << " ID num " << camIdB << " exposure " << inputVideoB.get(CAP_PROP_EXPOSURE) << "  Width and Height " << inputVideoB.get(CAP_PROP_FRAME_WIDTH) << " " << inputVideoB.get(CAP_PROP_FRAME_HEIGHT) << endl;
-
-
-
-
-	// collect data from each frame
-	vector< vector< Point2f > >  imagePointsA, imagePointsB;
-	vector< vector< vector< Point2f > > > allCorners1;
-
-	vector< vector< Point3f > > objectPointsA, objectPointsB;
-	vector< vector< int > > allIds1;
-
-	vector< Mat > allImgsA;
-	vector< Mat > allImgsB;
-
-	Size imgSizeA;
-	Size imgSizeB;
-	cout << "Create Windows" << endl;
-
-	namedWindow("CamA_StereoCalib_Output", WINDOW_KEEPRATIO);
-	moveWindow("CamA_StereoCalib_Output", 0, 10);
-	resizeWindow("CamA_StereoCalib_Output", 1920, 540);
-
-
+	cout << "Initialize Params and or Load Images" << endl;
 
 	cout << "Intialize Boards" << endl;
 	//Set up Chessboard Detection
 	Size board_size = Size(squaresX, squaresY);
 	cout << "board is " << squaresX << "  by  " << squaresY << endl;
 
+	// collect data from each frame
+	vector< Mat > allImgsA;
+	vector< Mat > allImgsB;
+	Size imgSizeA;
+	Size imgSizeB;
 
-	int framenum = 0;
+	vector< vector< Point2f > >  imagePointsA, imagePointsB;
+	vector< vector< vector< Point2f > > > allCorners1;
 
-	//This is the main video-grabbing loop
-	while (1) //inputVideoA.grab() && inputVideoB.grab()) // grab frams at the same time! for multicam
-	{
-		//while(1){
-			//Start the FPS timer
-		int64 tickstart = cv::getTickCount();
-
-		Mat imageA, imageCopyLowResA, grayA;
-
-		if (inputVideoA.isOpened())
-		{
-			Mat viewA;
-			inputVideoA >> viewA;
-			viewA.copyTo(imageA);
-		}
-
-		//inputVideoA.retrieve(imageA);
-
-		Mat imageB, imageCopyLowResB, grayB;
-		if (inputVideoB.isOpened())
-		{
-			Mat viewB;
-			inputVideoB >> viewB;
-			viewB.copyTo(imageB);
-		}
-
-		//inputVideoB.retrieve(imageB);
-
-		//inputVideoA >> imageA;
-		//inputVideoB >> imageB;
-
-		vector< int > ids;
-		vector< Point2f > cornersA, cornersB, rejected;
-
-		vector< int > ids1;
-		vector< vector< Point2f > > corners1, rejected1;
-
-		//MAKE GRAYSCALE FOR CornerSubPix PERFORMANCE
-		//cvtColor(imageA, grayA, COLOR_BGR2GRAY);
-		//cvtColor(imageB, grayB, COLOR_BGR2GRAY);
-
-		//First search for corners at LOW RES while live streaming
-
-			//Shrink the Image for Display purposes
-		Size showsize;
-		//showsize = Size(960, 540);
-		showsize = Size(640, 480);
-
-		imageA.copyTo(imageCopyLowResA);
-		imageB.copyTo(imageCopyLowResB);
-		resize(imageCopyLowResA, imageCopyLowResA, showsize, 0, 0);
-		resize(imageCopyLowResB, imageCopyLowResB, showsize, 0, 0);
+	vector< vector< Point3f > > objectPointsA, objectPointsB;
+	vector< vector< int > > allIds1;
 
 
 
-		//Detect Chessboards
 
-		bool foundA = false;
-		foundA = cv::findChessboardCorners(imageCopyLowResA, board_size, cornersA, CALIB_CB_FAST_CHECK);
+	//LOAD IMAGES FROM FILE
+	if (loadNumImgs > 0) {
+		cout << "LOAD IMAGES FROM Stereo FILES " << loadNumImgs << endl;
 
-		bool foundB = false;
-		foundB = cv::findChessboardCorners(imageCopyLowResB, board_size, cornersB,  CALIB_CB_FAST_CHECK );
+		for (int i = 1; i < loadNumImgs+1; i++) { //Load images and DON"T USE LIVE CAMERA
+			//char A_img[100], B_img[100];
+			//sprintf(A_img, "%s%s%d.%s", outputFolder, camAfilename, i, fileExtension);
+			//sprintf(B_img, "%s%s%d.%s", outputFolder, camBfilename, i, fileExtension);
+			Mat imgA, imgB;
+			string A_img = outputFolder + "/"  + camAfilename + to_string(i) + fileExtension;
+			string B_img = outputFolder + "/"  + camBfilename + to_string(i) + fileExtension;
 
-		//Display charuco
+			imgA = imread(A_img, IMREAD_COLOR);
+			imgB = imread(B_img, IMREAD_COLOR);
 
+			cout << "Frame " << i << " loaded camA  "<<A_img<<"  |  ";
 
-		//Change the gray back to color
-	/*	cvtColor(imageCopyA, imageCopyA, COLOR_GRAY2BGR);
-		cvtColor(imageCopyB, imageCopyB, COLOR_GRAY2BGR);*/
+		
 
+			allImgsA.push_back(imgA);
+			imgSizeA = imgA.size();
+			cout << "Frame " << i << " loaded camB   " << B_img << endl;
 
-		if (foundA)
-		{
-			//cornerSubPix(grayA, corners, cv::Size(5, 5), cv::Size(-1, -1), 				TermCriteria(TermCriteria::EPS | TermCriteria::MAX_ITER, 30, 0.1));
-			drawChessboardCorners(imageCopyLowResA, board_size, cornersA, foundA);
-		}
-		if (foundB)
-		{
-			//	cornerSubPix(grayB, corners, cv::Size(5, 5), cv::Size(-1, -1), 				TermCriteria(TermCriteria::EPS | TermCriteria::MAX_ITER, 30, 0.1));
-			drawChessboardCorners(imageCopyLowResB, board_size, cornersB, foundB);
-		}
+			allImgsB.push_back(imgB);
+			imgSizeB = imgB.size();
 
-		Scalar texColA = Scalar(255, 0, 0);
-		Scalar texColB = Scalar(255, 0, 0);
-
-		if (!foundA) {
-			texColA = Scalar(0, 0, 255);
-			putText(imageCopyLowResA, "NOT ALL POINTS VISIBLE ",
-				Point(10, 100), FONT_HERSHEY_SIMPLEX, 1.4, texColA, 4);
-		}
-		putText(imageCopyLowResA, "Cam A: Press 'c' to add current frame. 'ESC' to finish and calibrate",
-			Point(10, 20), FONT_HERSHEY_SIMPLEX, .5, texColA, 2);
-
-
-		if (!foundB) {
-			texColB = Scalar(0, 0, 255);
-
-			putText(imageCopyLowResB, "NOT ALL POINTS VISIBLE ",
-				Point(10, 100), FONT_HERSHEY_SIMPLEX, 1.4, texColB, 2);
-		}
-		putText(imageCopyLowResB, "Cam B: 'c'=add current frame. 'ESC'= calibrate",
-			Point(10, 20), FONT_HERSHEY_SIMPLEX, .5, texColB, 2);
-
-
-		//Show the FPS
-		putText(imageCopyLowResA, "FPS: " + to_string(realfps),
-			Point(10, 400), FONT_HERSHEY_SIMPLEX, 1, texColA, 2);
-		putText(imageCopyLowResB, "FPS: " + to_string(realfps),
-			Point(10, 400), FONT_HERSHEY_SIMPLEX, 1, texColA, 2);
-
-		//TODO scale these windows to be more manageable sizes
-		//Put windows next to each other
-		hconcat(imageCopyLowResA, imageCopyLowResB, imageCopyLowResA);
-		imshow("CamA_StereoCalib_Output", imageCopyLowResA);
-
-		//imshow("CamB_StereoCalib_Output", imageCopyB);
-
-		//HANDLE INPUT 
-
-		char key = (char)waitKey(waitTime);
-
-		if (key == 27) break;//Leave this loop if we hit escape
-
-		//Change Camera around if we need
-		if (key == '0') {
-			inputVideoA.open(0);
-			cout << "Changed CamA to Input 0 " << endl;
-
-		}
-		if (key == '1') {
-			inputVideoA.open(1);
-			cout << "Changed CamA to Input 1 " << endl;
-
-		}
-		if (key == '2') {
-			inputVideoA.open(2);
-			cout << "Changed CamA to Input 2 " << endl;
-
-		}
-		if (key == '3') {
-			inputVideoA.open(3);
-			cout << "Changed CamA to Input 3 " << endl;
-
-		}
-
-		if (key == KEY_LEFT) {
-			inputVideoB.open(0);
-			cout << "Changed CamB to Input 0 " << endl;
-
-		}
-		if (key == KEY_DOWN) {
-			inputVideoB.open(1);
-			cout << "Changed CamB to Input 1 " << endl;
-
-		}
-		if (key == KEY_RIGHT) {
-			inputVideoB.open(2);
-			cout << "Changed CamB to Input 2 " << endl;
-
-		}
-
-		if (key == 'c' && (!foundA || !foundB)) {
-
-			cout << "Frame Not Captured, Please make sure all IDs are visible!" << endl;
 
 
 		}
-
-		if (key == 'c' && foundA && foundB) {
-
-
-			//Process the Captured Frame Chess corners
-
-
-
-			cout << "Frame " << framenum << " captured camA" << endl;
-
-			allImgsA.push_back(imageA);
-			imgSizeA = imageA.size();
-
-
-
-			//Cam B
-
-			cout << "Frame captured camB" << endl;
-
-			allImgsB.push_back(imageB);
-			imgSizeB = imageB.size();
-
-			framenum++;
-
-		}
-		//Calculate Framerate
-
-		realfps = cv::getTickFrequency() / (cv::getTickCount() - tickstart);
-
-		//cout << "Estimated frames per second : " << realfps << "   Time taken : " << cv::getTickCount() - tickstart << " seconds" << endl;
+		imshow("test", allImgsA[0]);
+		cout << "Image Sizes " << imgSizeA << "   images b   " << imgSizeB << endl;
 
 	}
+
+	//Do Live Image Capture
+
+	else {
+
+		VideoCapture inputVideoA;
+		VideoCapture inputVideoB;
+
+		int waitTime;
+		if (!video.empty()) {
+			cout << "Capture from Video Frames " << loadNumImgs << endl;
+			inputVideoA.open(video);
+			waitTime = 0;
+		}
+		else {
+			cout << "Live Capture Images " << loadNumImgs << endl;
+
+			//inputVideoA.open(camIdA, CAP_DSHOW);
+			//inputVideoB.open(camIdB, CAP_DSHOW);
+			inputVideoA.open(camIdA);
+			inputVideoB.open(camIdB); //  runs a bit faster without DSHOW
+
+			/*inputVideoA.open(camIdA, CAP_FFMPEG);
+			inputVideoB.open(camIdB, CAP_ANY);*/
+
+			waitTime = 2;
+		}
+
+
+
+		//inputVideoA.set(CAP_PROP_FOURCC, VideoWriter::fourcc('H' , '2', '6', '4'));			//Camera Settings Dialog
+
+		inputVideoA.set(CAP_PROP_SETTINGS, 0); //This pops up the nice dialog to keep camera settings persistent. You need directshow DSHOW enabled as the capturer, and you need a number here that doesn't do anything but you have to have it there
+		inputVideoB.set(CAP_PROP_SETTINGS, 0);
+		inputVideoA.set(CAP_PROP_MONOCHROME, 1);
+
+		//inputVideo0.set(CAP_PROP_AUTO_EXPOSURE, .25);
+		//inputVideo1.set(CAP_PROP_AUTO_EXPOSURE, .1);
+
+		//inputVideoA.set(CAP_PROP_FPS, 5);
+
+		//inputVideoB.set(CAP_PROP_FPS, 5);
+
+
+		//Manually Set Camera Parameters
+
+		/**/
+		inputVideoA.set(CAP_PROP_FRAME_WIDTH, 3264);
+		inputVideoA.set(CAP_PROP_FRAME_HEIGHT, 2448);
+		inputVideoB.set(CAP_PROP_FRAME_WIDTH, 3264);
+		inputVideoB.set(CAP_PROP_FRAME_HEIGHT, 2448);
+		/**/
+
+		cout << "Cameras Started" << endl;
+		cout << "Cameras A Properties " << " ID num " << camIdA << " exposure " << inputVideoA.get(CAP_PROP_EXPOSURE) << "  Backend API " << inputVideoA.get(CAP_PROP_BACKEND) << "  Width and Height " << inputVideoA.get(CAP_PROP_FRAME_WIDTH) << " " << inputVideoA.get(CAP_PROP_FRAME_HEIGHT) << endl;
+		cout << "Cameras B Properties " << " ID num " << camIdB << " exposure " << inputVideoB.get(CAP_PROP_EXPOSURE) << "  Width and Height " << inputVideoB.get(CAP_PROP_FRAME_WIDTH) << " " << inputVideoB.get(CAP_PROP_FRAME_HEIGHT) << endl;
+
+
+
+		cout << "Create Windows" << endl;
+
+		namedWindow("CamA_StereoCalib_Output", WINDOW_KEEPRATIO);
+		moveWindow("CamA_StereoCalib_Output", 0, 10);
+		resizeWindow("CamA_StereoCalib_Output", 1920, 540);
+		int framenum = 0;
+
+		//This is the main video-grabbing loop
+		while (1) //inputVideoA.grab() && inputVideoB.grab()) // grab frams at the same time! for multicam
+		{
+			//while(1){
+				//Start the FPS timer
+			int64 tickstart = cv::getTickCount();
+
+			Mat imageA, imageCopyLowResA, grayA;
+
+			if (inputVideoA.isOpened())
+			{
+				Mat viewA;
+				inputVideoA >> viewA;
+				viewA.copyTo(imageA);
+			}
+
+			//inputVideoA.retrieve(imageA);
+
+			Mat imageB, imageCopyLowResB, grayB;
+			if (inputVideoB.isOpened())
+			{
+				Mat viewB;
+				inputVideoB >> viewB;
+				viewB.copyTo(imageB);
+			}
+
+			//inputVideoB.retrieve(imageB);
+
+			//inputVideoA >> imageA;
+			//inputVideoB >> imageB;
+
+			vector< int > ids;
+			vector< Point2f > cornersA, cornersB, rejected;
+
+			vector< int > ids1;
+			vector< vector< Point2f > > corners1, rejected1;
+
+			//MAKE GRAYSCALE FOR CornerSubPix PERFORMANCE
+			//cvtColor(imageA, grayA, COLOR_BGR2GRAY);
+			//cvtColor(imageB, grayB, COLOR_BGR2GRAY);
+
+			//First search for corners at LOW RES while live streaming
+
+				//Shrink the Image for Display purposes
+			Size showsize;
+			//showsize = Size(960, 540);
+			showsize = Size(640, 480);
+
+			imageA.copyTo(imageCopyLowResA);
+			imageB.copyTo(imageCopyLowResB);
+			resize(imageCopyLowResA, imageCopyLowResA, showsize, 0, 0);
+			resize(imageCopyLowResB, imageCopyLowResB, showsize, 0, 0);
+
+
+
+			//Detect Chessboards
+
+			bool foundA = false;
+			foundA = cv::findChessboardCorners(imageCopyLowResA, board_size, cornersA, CALIB_CB_FAST_CHECK);
+
+			bool foundB = false;
+			foundB = cv::findChessboardCorners(imageCopyLowResB, board_size, cornersB, CALIB_CB_FAST_CHECK);
+
+			
+			//Change the gray back to color
+		/*	cvtColor(imageCopyA, imageCopyA, COLOR_GRAY2BGR);
+			cvtColor(imageCopyB, imageCopyB, COLOR_GRAY2BGR);*/
+
+
+			if (foundA)
+			{
+				//cornerSubPix(grayA, corners, cv::Size(5, 5), cv::Size(-1, -1), 				TermCriteria(TermCriteria::EPS | TermCriteria::MAX_ITER, 30, 0.1));
+				drawChessboardCorners(imageCopyLowResA, board_size, cornersA, foundA);
+			}
+			if (foundB)
+			{
+				//	cornerSubPix(grayB, corners, cv::Size(5, 5), cv::Size(-1, -1), 				TermCriteria(TermCriteria::EPS | TermCriteria::MAX_ITER, 30, 0.1));
+				drawChessboardCorners(imageCopyLowResB, board_size, cornersB, foundB);
+			}
+
+			Scalar texColA = Scalar(255, 0, 0);
+			Scalar texColB = Scalar(255, 0, 0);
+
+			if (!foundA) {
+				texColA = Scalar(0, 0, 255);
+				putText(imageCopyLowResA, "NOT ALL POINTS VISIBLE ",
+					Point(10, 100), FONT_HERSHEY_SIMPLEX, 1.4, texColA, 4);
+			}
+			putText(imageCopyLowResA, "Cam A: Press 'c' to add current frame. 'ESC' to finish and calibrate",
+				Point(10, 20), FONT_HERSHEY_SIMPLEX, .5, texColA, 2);
+
+
+			if (!foundB) {
+				texColB = Scalar(0, 0, 255);
+
+				putText(imageCopyLowResB, "NOT ALL POINTS VISIBLE ",
+					Point(10, 100), FONT_HERSHEY_SIMPLEX, 1.4, texColB, 2);
+			}
+			putText(imageCopyLowResB, "Cam B: 'c'=add current frame. 'ESC'= calibrate",
+				Point(10, 20), FONT_HERSHEY_SIMPLEX, .5, texColB, 2);
+
+
+			//Show the FPS
+			putText(imageCopyLowResA, "FPS: " + to_string(realfps),
+				Point(10, 400), FONT_HERSHEY_SIMPLEX, 1, texColA, 2);
+			putText(imageCopyLowResB, "FPS: " + to_string(realfps),
+				Point(10, 400), FONT_HERSHEY_SIMPLEX, 1, texColA, 2);
+
+			//TODO scale these windows to be more manageable sizes
+			//Put windows next to each other
+			hconcat(imageCopyLowResA, imageCopyLowResB, imageCopyLowResA);
+			imshow("CamA_StereoCalib_Output", imageCopyLowResA);
+
+			//imshow("CamB_StereoCalib_Output", imageCopyB);
+
+			//HANDLE INPUT 
+
+			char key = (char)waitKey(waitTime);
+
+			if (key == 27) {//Leave this loop if we hit escape
+			
+				//Kill the Cameras
+
+				inputVideoA.release();
+				inputVideoB.release();
+
+				//Save all the Captured Images, keep them in the vault
+				cout << "Saving All images" << endl;
+
+				bool save1 = false;
+				bool save2 = false;
+
+				for (int i = 0; i < allImgsA.size(); i++) {
+					ostringstream name;
+					name << i + 1;
+					save1 = imwrite(outputFolder + "/" + "camA_im" + name.str() + ".png", allImgsA[i]);
+					save2 = imwrite(outputFolder + "/" + "camB_im" + name.str() + ".png", allImgsB[i]);
+					if ((save1) && (save2))
+					{
+						cout << "pattern camA and camB images number " << i + 1 << " saved" << endl << endl;
+
+					}
+					else
+					{
+						cout << "pattern camA and camB images number " << i + 1 << " NOT saved" << endl << endl << "Retry, check the path" << endl << endl;
+					}
+				}
+
+				break;
+			}
+			//Change Camera around if we need
+			if (key == '0') {
+				inputVideoA.open(0);
+				cout << "Changed CamA to Input 0 " << endl;
+
+			}
+			if (key == '1') {
+				inputVideoA.open(1);
+				cout << "Changed CamA to Input 1 " << endl;
+
+			}
+			if (key == '2') {
+				inputVideoA.open(2);
+				cout << "Changed CamA to Input 2 " << endl;
+
+			}
+			if (key == '3') {
+				inputVideoA.open(3);
+				cout << "Changed CamA to Input 3 " << endl;
+
+			}
+
+			if (key == KEY_LEFT) {
+				inputVideoB.open(0);
+				cout << "Changed CamB to Input 0 " << endl;
+
+			}
+			if (key == KEY_DOWN) {
+				inputVideoB.open(1);
+				cout << "Changed CamB to Input 1 " << endl;
+
+			}
+			if (key == KEY_RIGHT) {
+				inputVideoB.open(2);
+				cout << "Changed CamB to Input 2 " << endl;
+
+			}
+
+			if (key == 'c' && (!foundA || !foundB)) {
+
+				cout << "Frame Not Captured, Please make sure all IDs are visible!" << endl;
+
+
+			}
+
+			if (key == 'c' && foundA && foundB) {
+
+
+				//Process the Captured Frame Chess corners
+
+
+
+				cout << "Frame " << framenum << " captured camA" << endl;
+
+				allImgsA.push_back(imageA);
+				imgSizeA = imageA.size();
+
+
+
+				//Cam B
+
+				cout << "Frame captured camB" << endl;
+
+				allImgsB.push_back(imageB);
+				imgSizeB = imageB.size();
+
+				framenum++;
+
+			}
+			//Calculate Framerate
+
+			realfps = cv::getTickFrequency() / (cv::getTickCount() - tickstart);
+
+			//cout << "Estimated frames per second : " << realfps << "   Time taken : " << cv::getTickCount() - tickstart << " seconds" << endl;
+
+		}
+
+	}
+
 
 	/*
-
+	******
 	PROCESS STAGE
-
+	******
 	*/
 
-	//Kill the Cameras
+	
 
-	inputVideoA.release();
-	inputVideoB.release();
-
-	//Save all the Images, keep them in the vault
-	cout << "Saving All images" << endl;
-
-	bool save1 = false;
-	bool save2 = false;
-
-	for (int i = 0; i < allImgsA.size(); i++) {
-		ostringstream name;
-		name << i + 1;
-		save1 = imwrite(outputFolder + "/" + "camA_im" + name.str() + ".png", allImgsA[i]);
-		save2 = imwrite(outputFolder + "/" + "camB_im" + name.str() + ".png", allImgsB[i]);
-		if ((save1) && (save2))
-		{
-			cout << "pattern camA and camB images number " << i + 1 << " saved" << endl << endl;
-
-		}
-		else
-		{
-			cout << "pattern camA and camB images number " << i + 1 << " NOT saved" << endl << endl << "Retry, check the path" << endl << endl;
-		}
-	}
+	
 
 	vector< Point2f > cornersA, cornersB;
 
+	imshow("Sample Img", allImgsA[0]);
+
 	//Calibrate those chessboards individually!
-	cout << "Calibrating Cam A and Cam B at Full Resolution" << endl;
+	cout << "Calibrating Cam A and Cam B at Full Resolution | total images= "<< allImgsA.size() << endl;
 	for (int i = 0; i < allImgsA.size(); i++) {
 
 		//Show images as processing for debugging
@@ -594,19 +647,19 @@ int main(int argc, char* argv[]) {
 		showsize = Size(640, 480);
 		Mat imageCopyLowResA, imageCopyLowResB;
 
-		allImgsA[i].copyTo(imageCopyLowResA);
-		allImgsB[i].copyTo(imageCopyLowResB);
-		resize(imageCopyLowResA, imageCopyLowResA, showsize, 0, 0);
-		resize(imageCopyLowResB, imageCopyLowResB, showsize, 0, 0);
+		//allImgsA[i].copyTo(imageCopyLowResA);
+		//allImgsB[i].copyTo(imageCopyLowResB);
+		//resize(imageCopyLowResA, imageCopyLowResA, showsize, 0, 0);
+		//resize(imageCopyLowResB, imageCopyLowResB, showsize, 0, 0);
 
-		hconcat(imageCopyLowResA, imageCopyLowResB, imageCopyLowResA);
-		imshow("DebugViewCamA_StereoCalib_Output", imageCopyLowResA);
+		//hconcat(imageCopyLowResA, imageCopyLowResB, imageCopyLowResA);
+		//imshow("DebugViewCamA_StereoCalib_Output", imageCopyLowResA);
 
 		bool foundAFull = false;
-		foundAFull = cv::findChessboardCorners(allImgsA[i], board_size, cornersA, CALIB_CB_FAST_CHECK ); //CALIB_CB_ADAPTIVE_THRESH | | CALIB_CB_NORMALIZE_IMAGE
+		foundAFull = cv::findChessboardCorners(allImgsA[i], board_size, cornersA, CALIB_CB_ADAPTIVE_THRESH | CALIB_CB_FILTER_QUADS); //CALIB_CB_ADAPTIVE_THRESH | | CALIB_CB_NORMALIZE_IMAGE
 
 		bool foundBFull = false;
-		foundBFull = cv::findChessboardCorners(allImgsB[i], board_size, cornersB,CALIB_CB_FAST_CHECK );
+		foundBFull = cv::findChessboardCorners(allImgsB[i], board_size, cornersB, CALIB_CB_ADAPTIVE_THRESH | CALIB_CB_FILTER_QUADS);
 
 
 		if (!foundAFull || !foundBFull) //skip if we dont get a chessboard, extra check
@@ -772,6 +825,7 @@ int main(int argc, char* argv[]) {
 
 
 
+	waitKey();
 
 
 	destroyAllWindows();
