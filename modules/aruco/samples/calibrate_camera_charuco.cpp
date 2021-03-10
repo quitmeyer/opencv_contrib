@@ -867,7 +867,14 @@ int main(int argc, char* argv[]) {
 	stereoRectify(cameraMatrixA, distCoeffsA,
 		cameraMatrixB, distCoeffsB,
 		imgSizeA, R, T, R1, R2, P1, P2, Q,
-		CALIB_ZERO_DISPARITY, 1, imgSizeA, &validRoi[0], &validRoi[1]);
+		CALIB_ZERO_DISPARITY,
+		1, imgSizeA, &validRoi[0], &validRoi[1]);
+	// -1 will give default scaling
+	//0 means no black pixels in image
+	//1 means all valid pixels are in image (black usually around borders)
+
+
+	
 
 	fs.open(outputFolder + "/" + "Stereo_extrinsics.yml", FileStorage::WRITE);
 	if (fs.isOpened())
