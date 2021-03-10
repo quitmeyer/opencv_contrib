@@ -164,7 +164,7 @@ static bool saveCameraParams(const string& filename, Size imageSize, float aspec
 
 static bool saveCameraParamsStereo(const string& filename, Size imageSize, Size imageSize1, float aspectRatio, float aspectRatio1, int flags, int flags1,
 	const Mat& cameraMatrix, const Mat& cameraMatrix1, const Mat& distCoeffs, const Mat& distCoeffs1, double totalAvgErr, double totalAvgErr1,
-	Mat R, Mat T, double StereoRMS) {
+	Mat R, Mat T, Mat R1, Mat R2, Mat P1, Mat P2, Mat Q, double StereoRMS) {
 	FileStorage fs(filename, FileStorage::WRITE);
 	if (!fs.isOpened())
 		return false;
@@ -189,6 +189,7 @@ static bool saveCameraParamsStereo(const string& filename, Size imageSize, Size 
 
 	fs << "R" << R;
 	fs << "T" << T;
+	fs<<"R1" << R1 << "R2" << R2 << "P1" << P1 << "P2" << P2 << "Q" << Q;
 	fs << "stereo_error" << StereoRMS;
 	fs << "calibration_time" << buf;
 
@@ -292,13 +293,16 @@ int main(int argc, char* argv[]) {
 	vector< vector< int > > allIds1;
 
 
+	bool foundAq = false;
+	bool foundBq = false;
+	vector< Point2f > cornersAq, cornersBq;
 
 
 	//LOAD IMAGES FROM FILE
 	if (loadNumImgs > 0) {
 		cout << "LOAD IMAGES FROM Stereo FILES " << loadNumImgs << endl;
 
-		for (int i = 1; i < loadNumImgs+1; i++) { //Load images and DON"T USE LIVE CAMERA
+		for (int i = 0; i < loadNumImgs; i++) { //Load images and DON"T USE LIVE CAMERA
 			//char A_img[100], B_img[100];
 			//sprintf(A_img, "%s%s%d.%s", outputFolder, camAfilename, i, fileExtension);
 			//sprintf(B_img, "%s%s%d.%s", outputFolder, camBfilename, i, fileExtension);
@@ -321,9 +325,45 @@ int main(int argc, char* argv[]) {
 			imgSizeB = imgB.size();
 
 
+			/// Double check our loaded images
+
+			//Shrink the Image for Display purposes
+			Size showsize;
+			//showsize = Size(960, 540);
+			showsize = Size(640, 480);
+			Mat imageCopyLowResA, imageCopyLowResB;
+
+			imgA.copyTo(imageCopyLowResA);
+			imgB.copyTo(imageCopyLowResB);
+			resize(imageCopyLowResA, imageCopyLowResA, showsize, 0, 0);
+			resize(imageCopyLowResB, imageCopyLowResB, showsize, 0, 0);
+
+
+			//Detect Chessboards
+
+
+			foundAq = cv::findChessboardCorners(imageCopyLowResA, board_size, cornersAq, CALIB_CB_FAST_CHECK);
+
+			
+			foundBq = cv::findChessboardCorners(imageCopyLowResB, board_size, cornersBq, CALIB_CB_FAST_CHECK);
+
+			if (!foundAq || !foundBq) //skip if we dont get a chessboard, extra check
+			{
+
+				cout << "small size error on " << i << "   no chessboard found.   found a and b   " << foundAq << foundBq << endl;
+
+			}
+			else
+			{
+				cout << "Found Board small size  " << i << endl;
+				drawChessboardCorners(imageCopyLowResA, board_size, cornersAq, foundAq);
+
+				imshow("test loaded imgs", imageCopyLowResA);
+				waitKey(1);
+			}
 
 		}
-		imshow("test", allImgsA[0]);
+		//imshow("test", allImgsA[0]);
 		cout << "Image Sizes " << imgSizeA << "   images b   " << imgSizeB << endl;
 
 	}
@@ -480,6 +520,10 @@ int main(int argc, char* argv[]) {
 				texColA = Scalar(0, 0, 255);
 				putText(imageCopyLowResA, "NOT ALL POINTS VISIBLE ",
 					Point(10, 100), FONT_HERSHEY_SIMPLEX, 1.4, texColA, 4);
+
+				//show red detected dots
+				drawChessboardCorners(imageCopyLowResA, board_size, cornersA, foundA);
+
 			}
 			putText(imageCopyLowResA, "Cam A: Press 'c' to add current frame. 'ESC' to finish and calibrate",
 				Point(10, 20), FONT_HERSHEY_SIMPLEX, .5, texColA, 2);
@@ -490,6 +534,10 @@ int main(int argc, char* argv[]) {
 
 				putText(imageCopyLowResB, "NOT ALL POINTS VISIBLE ",
 					Point(10, 100), FONT_HERSHEY_SIMPLEX, 1.4, texColB, 2);
+
+				//show red detected dots
+				drawChessboardCorners(imageCopyLowResB, board_size, cornersB, foundB);
+
 			}
 			putText(imageCopyLowResB, "Cam B: 'c'=add current frame. 'ESC'= calibrate",
 				Point(10, 20), FONT_HERSHEY_SIMPLEX, .5, texColB, 2);
@@ -527,17 +575,18 @@ int main(int argc, char* argv[]) {
 
 				for (int i = 0; i < allImgsA.size(); i++) {
 					ostringstream name;
-					name << i + 1;
+					//name << i + 1;
+					name << i;
 					save1 = imwrite(outputFolder + "/" + "camA_im" + name.str() + ".png", allImgsA[i]);
 					save2 = imwrite(outputFolder + "/" + "camB_im" + name.str() + ".png", allImgsB[i]);
 					if ((save1) && (save2))
 					{
-						cout << "pattern camA and camB images number " << i + 1 << " saved" << endl << endl;
+						cout << "pattern camA and camB images number " << i  << " saved" << endl << endl;
 
 					}
 					else
 					{
-						cout << "pattern camA and camB images number " << i + 1 << " NOT saved" << endl << endl << "Retry, check the path" << endl << endl;
+						cout << "pattern camA and camB images number " << i << " NOT saved" << endl << endl << "Retry, check the path" << endl << endl;
 					}
 				}
 
@@ -635,7 +684,7 @@ int main(int argc, char* argv[]) {
 
 	vector< Point2f > cornersA, cornersB;
 
-	imshow("Sample Img", allImgsA[0]);
+	//imshow("Sample Img", allImgsA[0]);
 
 	//Calibrate those chessboards individually!
 	cout << "Calibrating Cam A and Cam B at Full Resolution | total images= "<< allImgsA.size() << endl;
@@ -656,16 +705,17 @@ int main(int argc, char* argv[]) {
 		//imshow("DebugViewCamA_StereoCalib_Output", imageCopyLowResA);
 
 		bool foundAFull = false;
-		foundAFull = cv::findChessboardCorners(allImgsA[i], board_size, cornersA, CALIB_CB_ADAPTIVE_THRESH | CALIB_CB_FILTER_QUADS); //CALIB_CB_ADAPTIVE_THRESH | | CALIB_CB_NORMALIZE_IMAGE
+		//foundAFull = cv::findChessboardCorners(allImgsA[i], board_size, cornersA, CALIB_CB_ADAPTIVE_THRESH | CALIB_CB_FILTER_QUADS); //CALIB_CB_ADAPTIVE_THRESH | | CALIB_CB_NORMALIZE_IMAGE
+		foundAFull = cv::findChessboardCornersSB(allImgsA[i], board_size, cornersA, CALIB_CB_ACCURACY); //CALIB_CB_ADAPTIVE_THRESH | | CALIB_CB_NORMALIZE_IMAGE
 
 		bool foundBFull = false;
-		foundBFull = cv::findChessboardCorners(allImgsB[i], board_size, cornersB, CALIB_CB_ADAPTIVE_THRESH | CALIB_CB_FILTER_QUADS);
-
+		//foundBFull = cv::findChessboardCorners(allImgsB[i], board_size, cornersB, CALIB_CB_ADAPTIVE_THRESH | CALIB_CB_FILTER_QUADS);
+		foundBFull = cv::findChessboardCornersSB(allImgsB[i], board_size, cornersB, CALIB_CB_ACCURACY);
 
 		if (!foundAFull || !foundBFull) //skip if we dont get a chessboard, extra check
 		{
 
-			cout << "error on captured frame, no chessboard  " << i << " found a and b   " << foundAFull << foundBFull << endl;
+			cout << "error on "<<i<< "   no chessboard found.   found a and b   " << foundAFull << foundBFull << endl;
 
 			//drawChessboardCorners(imageCopyLowResA, board_size, cornersA, foundA);
 		}
@@ -675,11 +725,12 @@ int main(int argc, char* argv[]) {
 
 			Mat grayA, grayB;
 
+			/* no Cornersubpix if using findchessboardcornersSB
 			cvtColor(allImgsA[i], grayA, COLOR_BGR2GRAY);
 			cvtColor(allImgsB[i], grayB, COLOR_BGR2GRAY);
 			cornerSubPix(grayA, cornersA, cv::Size(5, 5), cv::Size(-1, -1), TermCriteria(TermCriteria::EPS | TermCriteria::MAX_ITER, 30, 0.1));
 			cornerSubPix(grayB, cornersB, cv::Size(5, 5), cv::Size(-1, -1), TermCriteria(TermCriteria::EPS | TermCriteria::MAX_ITER, 30, 0.1));
-
+			*/
 			//Chessboard object
 			vector< Point3f > obj;
 			for (int i = 0; i < squaresY; i++)
@@ -798,6 +849,17 @@ int main(int argc, char* argv[]) {
 		cout << "Error: can not save the intrinsic parameters\n";
 
 
+	fs.open(outputFolder + "/" + "Stereo_extrinsics_preRect.yml", FileStorage::WRITE);
+	if (fs.isOpened())
+	{
+		fs << "R" << R << "T" << T;
+		fs.release();
+	}
+	else
+		cout << "Error: can not save the extrinsic parameters\n";
+
+
+
 	printf("Starting Stereo Rectification\n");
 	Mat R1, R2, P1, P2, Q;
 	Rect validRoi[2];
@@ -818,7 +880,7 @@ int main(int argc, char* argv[]) {
 
 	//This is the main file we want to get out of this program for the Structured Light Decoding
 	bool saveOkStereo = saveCameraParamsStereo(outputFolder + "/" + "stereoCalibrationParameters_camAcamB.yml", imgSizeA, imgSizeB, aspectRatio, aspectRatio1, calibrationFlagsA, calibrationFlagsB,
-		cameraMatrixA, cameraMatrixB, distCoeffsA, distCoeffsB, repErrorA, repErrorB, R, T, rms);
+		cameraMatrixA, cameraMatrixB, distCoeffsA, distCoeffsB, repErrorA, repErrorB, R, T,R1,R2,P1,P2,Q, rms);
 
 	printf("Done Stereo Rectification\n");
 
